@@ -77,6 +77,16 @@ class SchemaMapping:
             return None
         return _resolve_path(record_data, mapping.json_path)
 
+    def resolve_all(self, record_data: dict[str, Any], role: FieldRole) -> dict[str, Any]:
+        """Return {json_path: value} for ALL mappings with the given role."""
+        result: dict[str, Any] = {}
+        for m in self.mappings:
+            if m.role == role:
+                val = _resolve_path(record_data, m.json_path)
+                if val is not None:
+                    result[m.json_path] = val
+        return result
+
     def active_roles(self) -> list[FieldRole]:
         seen: set[FieldRole] = set()
         roles: list[FieldRole] = []
@@ -90,6 +100,7 @@ class SchemaMapping:
         mapped_paths = {m.json_path for m in self.mappings if m.role != FieldRole.UNMAPPED}
         result = {}
         for key, val in record_data.items():
+            # Check if this key is a prefix of (or equal to) any mapped path
             if key not in mapped_paths:
                 result[key] = val
         return result
@@ -103,14 +114,24 @@ class SchemaMapping:
 
     def to_config(self) -> dict[str, Any]:
         config: dict[str, Any] = {"mapping": {}, "display": {}}
+        # Group mappings by role to support multi-field roles
+        role_paths: dict[str, list[str]] = {}
+        role_sub_fields: dict[str, dict[str, str]] = {}
+        role_display: dict[str, str] = {}
         for m in self.mappings:
             if m.role == FieldRole.UNMAPPED:
                 continue
-            config["mapping"][m.role.value] = m.json_path
+            role_paths.setdefault(m.role.value, []).append(m.json_path)
             if m.sub_fields:
-                config["mapping"][f"{m.role.value}_fields"] = m.sub_fields
+                role_sub_fields[m.role.value] = m.sub_fields
             if m.display_name != m.role.display_name:
-                config["display"][m.role.value] = m.display_name
+                role_display[m.role.value] = m.display_name
+        for role_val, paths in role_paths.items():
+            config["mapping"][role_val] = paths[0] if len(paths) == 1 else paths
+            if role_val in role_sub_fields:
+                config["mapping"][f"{role_val}_fields"] = role_sub_fields[role_val]
+            if role_val in role_display:
+                config["display"][role_val] = role_display[role_val]
         return config
 
     @classmethod
@@ -123,16 +144,21 @@ class SchemaMapping:
             if role == FieldRole.UNMAPPED:
                 continue
             path = mapping_section.get(role.value)
-            if path and isinstance(path, str):
-                sub_fields = mapping_section.get(f"{role.value}_fields", {})
-                display_name = display_section.get(role.value, role.display_name)
-                mappings.append(FieldMapping(
-                    json_path=path,
-                    role=role,
-                    display_name=display_name,
-                    sub_fields=sub_fields if isinstance(sub_fields, dict) else {},
-                    confidence=1.0,
-                ))
+            if not path:
+                continue
+            sub_fields = mapping_section.get(f"{role.value}_fields", {})
+            display_name = display_section.get(role.value, role.display_name)
+            # Support both single string and list of strings
+            paths = path if isinstance(path, list) else [path]
+            for p in paths:
+                if isinstance(p, str):
+                    mappings.append(FieldMapping(
+                        json_path=p,
+                        role=role,
+                        display_name=display_name,
+                        sub_fields=sub_fields if isinstance(sub_fields, dict) else {},
+                        confidence=1.0,
+                    ))
 
         return cls(mappings=mappings)
 
@@ -197,6 +223,22 @@ class SchemaMapping:
                     mapping.sub_fields = _detect_doc_subfields(samples)
                 mappings.append(mapping)
                 claimed_roles.add(role)
+
+        # Pass 3: Scan remaining unmapped keys for score-like floats
+        # These get assigned to METRICS (allowing multiple fields per role)
+        mapped_keys = {m.json_path for m in mappings}
+        for key, samples in key_samples.items():
+            if key in mapped_keys:
+                continue
+            if _is_score_like_field(key, samples):
+                presence = key_counts[key] / total
+                mappings.append(FieldMapping(
+                    json_path=key,
+                    role=FieldRole.METRICS,
+                    confidence=0.6 * presence,
+                ))
+                # Note: we do NOT add METRICS to claimed_roles here,
+                # because multiple fields can share this role.
 
         return cls(mappings=mappings)
 
@@ -263,6 +305,25 @@ def _looks_like_trace(items: list[dict[str, Any]]) -> bool:
         if keys_lower & {"role", "action", "step", "tool", "type", "function"}:
             return True
     return False
+
+
+_SCORE_SUBSTRINGS = {
+    "score", "relevance", "similarity", "confidence", "precision",
+    "recall", "f1", "accuracy", "bleu", "rouge", "coherence",
+    "faithfulness", "relevancy", "ndcg", "mrr", "distance",
+}
+
+
+def _is_score_like_field(key: str, samples: list[Any]) -> bool:
+    """Check if a key name contains score-like substrings and values are floats in [0,1]."""
+    key_lower = key.lower().replace("_", "").replace("-", "")
+    if not any(sub in key_lower for sub in _SCORE_SUBSTRINGS):
+        return False
+    # Check that sampled values are floats in [0, 1]
+    numeric_samples = [s for s in samples if isinstance(s, (int, float)) and not isinstance(s, bool)]
+    if not numeric_samples:
+        return False
+    return all(0 <= v <= 1 for v in numeric_samples)
 
 
 def _detect_doc_subfields(samples: list[Any]) -> dict[str, str]:

@@ -1,0 +1,2 @@
+{"query": "What is RAG?", "response": "RAG is ...", "faithfulness": 0.94, "relevancy": 0.91, "coherence": 0.88}
+{"query": "How does vector search work?", "response": "Vector search ...", "faithfulness": 0.87, "relevancy": 0.93, "coherence": 0.90}

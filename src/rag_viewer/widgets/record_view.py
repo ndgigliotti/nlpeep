@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from rich.syntax import Syntax
 from textual.app import ComposeResult
@@ -54,10 +55,30 @@ class RecordContent(Widget):
                     yield self._build_comparison_pane(record, mapping)
                     continue
 
-                role_mapping = mapping.get_mapping(role)
-                if not role_mapping:
+                all_for_role = mapping.get_all_for_role(role)
+                if not all_for_role:
                     continue
 
+                if len(all_for_role) > 1:
+                    # Multiple fields mapped to this role -- group into one dict
+                    grouped_values: dict[str, Any] = {}
+                    for m in all_for_role:
+                        val = record.get_path(m.json_path)
+                        if val is not None:
+                            grouped_values[m.json_path] = val
+                    if grouped_values:
+                        yield TabPane(
+                            role.display_name,
+                            FieldPanel(
+                                field_name=role.display_name,
+                                value=grouped_values,
+                                role=role,
+                                show_label=False,
+                            ),
+                        )
+                    continue
+
+                role_mapping = all_for_role[0]
                 value = mapping.resolve(record.data, role)
                 if value is None:
                     continue
