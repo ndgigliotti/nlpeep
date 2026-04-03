@@ -1,0 +1,147 @@
+Screen {
+    background: $background;
+}
+
+#main-container {
+    height: 1fr;
+}
+
+/* Navigator */
+RecordNavigator {
+    width: 36;
+    border-right: solid $primary-background-lighten-2;
+}
+
+RecordNavigator #nav-search {
+    dock: top;
+    margin: 0;
+    border: none;
+    border-bottom: solid $primary-background-lighten-1;
+    background: $surface;
+    padding: 0 1;
+}
+
+RecordNavigator #nav-list {
+    height: 1fr;
+}
+
+RecordNavigator ListItem {
+    padding: 0;
+}
+
+RecordNavigator ListItem:hover {
+    background: $primary-background-lighten-1;
+}
+
+/* Record view */
+RecordView {
+    width: 1fr;
+}
+
+RecordView #query-header {
+    dock: top;
+    background: $primary-background;
+    padding: 1 2;
+    border-bottom: solid $primary-background-lighten-2;
+    max-height: 6;
+}
+
+RecordView #record-content {
+    height: 1fr;
+    padding: 0;
+}
+
+/* Tabs */
+TabbedContent {
+    height: 1fr;
+}
+
+TabPane {
+    padding: 1 2;
+}
+
+/* Field panels */
+FieldPanel {
+    padding: 0 0 1 0;
+}
+
+FieldPanel .field-label {
+    color: $text-muted;
+    text-style: bold;
+}
+
+/* Score bars */
+ScoreBar {
+    height: 1;
+    padding: 0 1;
+}
+
+/* Doc cards */
+DocCard {
+    margin: 0 0 1 0;
+    border: solid $primary-background-lighten-1;
+}
+
+DocCard .doc-header {
+    background: $surface-lighten-1;
+    padding: 0 1;
+}
+
+DocCard .doc-body {
+    padding: 1 2;
+}
+
+/* Chat messages */
+.chat-message {
+    padding: 1 2;
+    margin: 0 0 1 0;
+    border: solid $primary-background-lighten-1;
+}
+
+.chat-system {
+    border: solid $warning;
+}
+
+.chat-user {
+    border: solid cyan;
+}
+
+.chat-assistant {
+    border: solid green;
+}
+
+.chat-tool, .chat-function {
+    border: solid magenta;
+}
+
+/* Step list */
+.step-content {
+    padding: 0 2;
+}
+
+/* Comparison panes */
+.comparison-pane {
+    width: 1fr;
+    border-right: solid $primary-background-lighten-1;
+    padding: 0 1;
+}
+
+/* Data tables */
+DataTable {
+    height: auto;
+    max-height: 20;
+}
+
+/* Status bar */
+#status-bar {
+    dock: bottom;
+    height: 1;
+    background: $primary-background;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+/* Metrics container */
+.field-metrics {
+    padding: 1 0;
+}
