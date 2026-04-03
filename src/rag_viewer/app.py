@@ -18,7 +18,7 @@ from rag_viewer.widgets.record_view import RecordView
 
 class RagViewerApp(App):
     CSS_PATH = "styles/app.tcss"
-    TITLE = "rag-viewer"
+    TITLE = "RAG VIEWER"
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
@@ -54,6 +54,7 @@ class RagViewerApp(App):
         self._load_data()
 
     def _load_data(self) -> None:
+        self.sub_title = str(self._path.name)
         self._store = RecordStore.load(self._path)
 
         if not self._store.records:

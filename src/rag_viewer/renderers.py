@@ -176,11 +176,11 @@ def _render_chat_messages(value: Any, field_name: str, sub_fields: dict[str, str
             # Handle structured content (e.g., tool results)
             content = json.dumps(content, indent=2)
         role_colors = {
-            "system": "yellow",
-            "user": "cyan",
-            "assistant": "green",
-            "tool": "magenta",
-            "function": "magenta",
+            "system": "#ffb000",
+            "user": "#00e5ff",
+            "assistant": "#00ff88",
+            "tool": "#ff2d95",
+            "function": "#ff2d95",
         }
         color = role_colors.get(role, "white")
         header = f"[bold {color}]{escape(role)}[/bold {color}]"
