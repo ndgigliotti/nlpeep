@@ -33,13 +33,13 @@ class ScoreBar(Widget):
         empty = self.bar_width - filled
 
         if self.value >= 0.8:
-            color = "green"
+            color = "#00ff88"
         elif self.value >= 0.5:
-            color = "yellow"
+            color = "#ffb000"
         else:
-            color = "red"
+            color = "#ff2d95"
 
-        bar = f"[{color}]{'━' * filled}[/{color}][dim]{'━' * empty}[/dim]"
-        label_part = f"[bold]{escape(self.label)}[/bold]  " if self.label else ""
+        bar = f"[{color}]{'\u2588' * filled}[/{color}][#1e2a3a]{'\u2591' * empty}[/#1e2a3a]"
+        label_part = f"[bold #ccddee]{escape(self.label)}[/bold #ccddee]  " if self.label else ""
         text = f"{label_part}{bar}  [bold {color}]{self.value:.3f}[/bold {color}]"
         yield Static(text)

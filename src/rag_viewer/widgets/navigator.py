@@ -53,7 +53,7 @@ class RecordNavigator(Widget):
         self._filtered_indices: list[int] = list(range(len(store)))
 
     def compose(self) -> ComposeResult:
-        yield Input(placeholder="Search...", id="nav-search")
+        yield Input(placeholder="Search records...", id="nav-search")
         yield ListView(
             *self._build_items(self._filtered_indices),
             id="nav-list",
@@ -67,7 +67,7 @@ class RecordNavigator(Widget):
             label = record.label(label_path)
             item = ListItem(
                 Static(
-                    f"[dim]{idx:>4}[/dim]  {label}",
+                    f"[dim #00e5ff]{idx:>3}[/dim #00e5ff]  [#ccddee]{label}[/#ccddee]",
                     classes="nav-item-label",
                 ),
             )
