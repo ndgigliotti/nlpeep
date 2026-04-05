@@ -137,3 +137,25 @@ class TestCsvLoader:
             assert store[1].data["response"] == "Me."
         finally:
             path.unlink()
+
+
+# -- CSV detection parity with JSONL -----------------------------------------
+
+class TestCsvDetectionParity:
+    """Flat datasets should produce identical schema detection from CSV and JSONL."""
+
+    def test_imdb_sentiment(self) -> None:
+        from nlpeep.schema import SchemaMapping
+        jsonl = SchemaMapping.auto_detect(RecordStore.load(_REF / "imdb_sentiment.jsonl").sample())
+        csv = SchemaMapping.auto_detect(RecordStore.load(_REF / "imdb_sentiment.csv").sample())
+        jsonl_roles = {m.role.value: m.json_path for m in jsonl.mappings if m.role.value != "unmapped"}
+        csv_roles = {m.role.value: m.json_path for m in csv.mappings if m.role.value != "unmapped"}
+        assert csv_roles == jsonl_roles
+
+    def test_cnn_dailymail(self) -> None:
+        from nlpeep.schema import SchemaMapping
+        jsonl = SchemaMapping.auto_detect(RecordStore.load(_REF / "cnn_dailymail_summarization.jsonl").sample())
+        csv = SchemaMapping.auto_detect(RecordStore.load(_REF / "cnn_dailymail_summarization.csv").sample())
+        jsonl_roles = {m.role.value: m.json_path for m in jsonl.mappings if m.role.value != "unmapped"}
+        csv_roles = {m.role.value: m.json_path for m in csv.mappings if m.role.value != "unmapped"}
+        assert csv_roles == jsonl_roles
