@@ -85,13 +85,18 @@ class RecordStore:
         return results
 
     def field_summary(self) -> dict[str, set[str]]:
-        """Return union of all top-level keys with their observed Python type names."""
+        """Return union of all field paths (including nested) with their observed Python type names.
+
+        Nested dict fields are expanded into dot-paths (e.g. ``inputs.question``).
+        Lists are not recursed into -- they are treated as leaf values.
+        The depth is capped at 4 levels to avoid runaway expansion.
+        """
         summary: dict[str, set[str]] = {}
         for record in self.records:
-            for key, val in record.data.items():
-                if key not in summary:
-                    summary[key] = set()
-                summary[key].add(type(val).__name__)
+            for dot_path, val in _flatten_for_summary(record.data).items():
+                if dot_path not in summary:
+                    summary[dot_path] = set()
+                summary[dot_path].add(type(val).__name__)
         return summary
 
     def sample(self, n: int = 20) -> list[Record]:
@@ -104,6 +109,21 @@ def _truncate(s: str, length: int) -> str:
     if len(s) <= length:
         return s
     return s[: length - 1] + "\u2026"
+
+
+_MAX_SUMMARY_DEPTH = 4
+
+
+def _flatten_for_summary(data: dict[str, Any], prefix: str = "", depth: int = 0) -> dict[str, Any]:
+    """Flatten nested dicts into dot-paths, keeping lists as leaf values."""
+    result: dict[str, Any] = {}
+    for key, val in data.items():
+        dot_path = f"{prefix}.{key}" if prefix else key
+        if isinstance(val, dict) and depth < _MAX_SUMMARY_DEPTH:
+            result.update(_flatten_for_summary(val, dot_path, depth + 1))
+        else:
+            result[dot_path] = val
+    return result
 
 
 def _record_matches(data: Any, query: str) -> bool:
