@@ -1,11 +1,10 @@
 """Tests for file format loaders (CSV, TSV, JSON, JSONL)."""
+
 from __future__ import annotations
 
 import json
 import tempfile
 from pathlib import Path
-
-import pytest
 
 from nlpeep.data import RecordStore
 
@@ -13,6 +12,7 @@ _REF = Path(__file__).parent / "reference_data"
 
 
 # -- JSONL -------------------------------------------------------------------
+
 
 class TestJsonlLoader:
     def test_loads_records(self) -> None:
@@ -39,6 +39,7 @@ class TestJsonlLoader:
 
 
 # -- JSON --------------------------------------------------------------------
+
 
 class TestJsonLoader:
     def test_loads_array_of_objects(self) -> None:
@@ -84,6 +85,7 @@ class TestJsonLoader:
 
 
 # -- CSV / TSV ---------------------------------------------------------------
+
 
 class TestCsvLoader:
     def test_loads_csv(self) -> None:

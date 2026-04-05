@@ -3,6 +3,7 @@
 Verifies that the recursive nested-field detection and archetype
 classification produce reasonable mappings for each supported format.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -25,6 +26,7 @@ def _detect(path: Path) -> SchemaMapping:
 
 # -- helpers ----------------------------------------------------------------
 
+
 def _has_role(mapping: SchemaMapping, role: FieldRole) -> bool:
     return mapping.get_mapping(role) is not None
 
@@ -35,6 +37,7 @@ def _role_path(mapping: SchemaMapping, role: FieldRole) -> str | None:
 
 
 # -- LangSmith RAG trace (primary nested test case) -------------------------
+
 
 class TestLangSmithRagTrace:
     @pytest.fixture(autouse=True)
@@ -76,6 +79,7 @@ class TestLangSmithRagTrace:
 
 # -- Langfuse RAG trace (another nested format) -----------------------------
 
+
 class TestLangfuseRagTrace:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -92,6 +96,7 @@ class TestLangfuseRagTrace:
 
 # -- Phoenix OpenInference RAG trace ----------------------------------------
 
+
 class TestPhoenixTrace:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -106,6 +111,7 @@ class TestPhoenixTrace:
 
 
 # -- RAGAS evaluation output (flat structure, regression test) ---------------
+
 
 class TestRagasEvaluation:
     @pytest.fixture(autouse=True)
@@ -139,6 +145,7 @@ class TestRagasEvaluation:
 
 # -- Simple RAG output (flat, regression test) -------------------------------
 
+
 class TestSimpleRag:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -159,6 +166,7 @@ class TestSimpleRag:
 
 # -- Multi-hop RAG trace (mixed flat + nested) ------------------------------
 
+
 class TestMultiHopRag:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -175,6 +183,7 @@ class TestMultiHopRag:
 
 
 # -- Archetype classification -----------------------------------------------
+
 
 class TestArchetypeClassification:
     def test_score_archetype(self) -> None:
@@ -205,7 +214,10 @@ class TestArchetypeClassification:
         assert m.archetype == FieldArchetype.CATEGORY
 
     def test_free_text_archetype(self) -> None:
-        long_text = "This is a long piece of text that exceeds fifty characters and should be classified as free text."
+        long_text = (
+            "This is a long piece of text that exceeds fifty characters"
+            " and should be classified as free text."
+        )
         records = [
             {"description": long_text},
             {"description": long_text + " More words here for variation."},
@@ -246,6 +258,7 @@ class TestArchetypeClassification:
 
 # -- Recursive flattening ---------------------------------------------------
 
+
 class TestFlattenAndFieldSummary:
     def test_field_summary_includes_nested_paths(self) -> None:
         store = RecordStore.load(_REF / "langsmith_rag_trace.jsonl")
@@ -263,6 +276,7 @@ class TestFlattenAndFieldSummary:
 
 
 # -- Unmapped field filtering ------------------------------------------------
+
 
 class TestUnmappedFields:
     def test_nested_mapped_fields_excluded(self) -> None:

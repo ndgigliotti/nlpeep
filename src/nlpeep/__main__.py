@@ -10,7 +10,9 @@ def main(argv: list[str] | None = None) -> None:
         prog="peep",
         description="A beautiful TUI for inspecting NLP and RAG pipeline data",
     )
-    parser.add_argument("file", type=Path, help="Path to a data file (JSONL, JSON, CSV, TSV, Parquet)")
+    parser.add_argument(
+        "file", type=Path, help="Path to a data file (JSONL, JSON, CSV, TSV, Parquet)"
+    )
     parser.add_argument(
         "--config",
         type=Path,

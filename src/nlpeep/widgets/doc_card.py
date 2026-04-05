@@ -6,7 +6,7 @@ from typing import Any
 from rich.markup import escape
 from textual.app import ComposeResult
 from textual.widget import Widget
-from textual.widgets import Static, Collapsible
+from textual.widgets import Collapsible, Static
 
 
 class DocCard(Widget):
@@ -78,7 +78,8 @@ class DocCard(Widget):
             else:
                 header_parts.append(str(score))
         if source_key and source_key in self.doc:
-            header_parts.append(f"[dim italic $text-muted]{escape(str(self.doc[source_key]))}[/dim italic $text-muted]")
+            source_text = escape(str(self.doc[source_key]))
+            header_parts.append(f"[dim italic $text-muted]{source_text}[/dim italic $text-muted]")
 
         yield Static("  ".join(header_parts), classes="doc-header")
 

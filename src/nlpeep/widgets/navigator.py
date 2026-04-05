@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Vertical
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Input, ListView, ListItem, Static
+from textual.widgets import Input, ListItem, ListView, Static
 
 from nlpeep.data import RecordStore
 from nlpeep.schema import SchemaMapping

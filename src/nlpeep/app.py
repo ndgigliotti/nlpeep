@@ -105,6 +105,7 @@ class NLPeepApp(App):
             self._update_status()
             try:
                 from textual.widgets import ListView
+
                 self.query_one("#nav-list", ListView).focus()
             except Exception:
                 pass
@@ -178,6 +179,7 @@ class NLPeepApp(App):
     def action_focus_search(self) -> None:
         try:
             from textual.widgets import Input
+
             search = self.query_one("#nav-search", Input)
             search.focus()
         except Exception:
@@ -187,6 +189,7 @@ class NLPeepApp(App):
         """Move focus away from search input to the record list."""
         try:
             from textual.widgets import ListView
+
             list_view = self.query_one("#nav-list", ListView)
             list_view.focus()
         except Exception:
@@ -194,6 +197,7 @@ class NLPeepApp(App):
 
     def _input_focused(self) -> bool:
         from textual.widgets import Input
+
         return isinstance(self.focused, Input)
 
     def action_next_record(self) -> None:

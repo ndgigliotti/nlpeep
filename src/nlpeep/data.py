@@ -106,9 +106,7 @@ class RecordStore:
             data = json.load(f)
         if isinstance(data, list):
             records = [
-                Record(index=i, data=item)
-                for i, item in enumerate(data)
-                if isinstance(item, dict)
+                Record(index=i, data=item) for i, item in enumerate(data) if isinstance(item, dict)
             ]
             skipped = len(data) - len(records)
             return cls(records=records, skipped=skipped, path=path)
@@ -242,7 +240,7 @@ class RecordStore:
 
         # Step 3: Assemble each group into a composite record.
         composites: list[Record] = []
-        for idx, (gid, group_records) in enumerate(best_groups.items()):
+        for idx, (_gid, group_records) in enumerate(best_groups.items()):
             if len(group_records) == 1:
                 # Single-record groups stay as-is
                 composites.append(Record(index=idx, data=group_records[0].data.copy()))
@@ -338,14 +336,13 @@ def _is_substantial_value(val: Any) -> bool:
     Substantial means: a list of dicts (documents, messages, generations),
     or a non-trivial nested dict.
     """
-    if isinstance(val, list) and val:
-        if any(isinstance(item, dict) for item in val):
-            return True
-    return False
+    return bool(isinstance(val, list) and val and any(isinstance(item, dict) for item in val))
 
 
 def _promote_child_values(
-    base: dict[str, Any], child: dict[str, Any], prefix: str = "",
+    base: dict[str, Any],
+    child: dict[str, Any],
+    prefix: str = "",
 ) -> None:
     """Walk child data and promote substantial values not present in base.
 
@@ -360,9 +357,12 @@ def _promote_child_values(
                 _promote_child_values(base[key], val, prefix=f"{prefix}.{key}" if prefix else key)
         elif _is_substantial_value(val):
             # Only promote if the base does not already have this value
-            if key not in base or base[key] is None:
-                base[key] = _deep_copy_list(val) if isinstance(val, list) else val
-            elif isinstance(base[key], list) and not base[key]:
+            if (
+                key not in base
+                or base[key] is None
+                or isinstance(base[key], list)
+                and not base[key]
+            ):
                 base[key] = _deep_copy_list(val) if isinstance(val, list) else val
 
 

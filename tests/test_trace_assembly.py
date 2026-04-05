@@ -5,6 +5,7 @@ trace data (structurally heterogeneous records sharing a group ID)
 and assembles spans into composite records, while leaving non-trace
 data unchanged.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,6 +18,7 @@ _REF = Path(__file__).parent / "reference_data"
 
 
 # -- LangSmith trace file: should assemble into 1 composite record -----------
+
 
 class TestLangSmithTraceAssembly:
     @pytest.fixture(autouse=True)
@@ -79,15 +81,14 @@ class TestLangSmithTraceAssembly:
     def test_trace_spans_contain_original_data(self) -> None:
         spans = self.assembled[0].data["_trace_spans"]
         # The retriever span should have its original documents
-        retriever_span = next(
-            s for s in spans if s.get("name") == "vector_store_retriever"
-        )
+        retriever_span = next(s for s in spans if s.get("name") == "vector_store_retriever")
         docs = retriever_span.get("outputs", {}).get("documents")
         assert docs is not None
         assert len(docs) == 4
 
 
 # -- RAGAS evaluation: should NOT fire trace assembly -------------------------
+
 
 class TestRagasNoAssembly:
     @pytest.fixture(autouse=True)
@@ -107,6 +108,7 @@ class TestRagasNoAssembly:
 
 # -- Simple RAG output: should NOT fire (no group ID field) -------------------
 
+
 class TestSimpleRagNoAssembly:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
@@ -123,57 +125,79 @@ class TestSimpleRagNoAssembly:
 
 # -- Synthetic test: records with shared group_id, different structures -------
 
+
 class TestSyntheticTraceAssembly:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
         records = [
-            Record(index=0, data={
-                "trace_id": "t1",
-                "name": "root",
-                "parent_id": None,
-                "inputs": {"query": "What is X?"},
-                "outputs": {"answer": "X is Y."},
-                "start_time": "2026-01-01T00:00:01",
-            }),
-            Record(index=1, data={
-                "trace_id": "t1",
-                "name": "retriever",
-                "parent_id": "root-id",
-                "outputs": {"documents": [
-                    {"text": "Doc about X", "score": 0.9},
-                    {"text": "More about X", "score": 0.8},
-                ]},
-                "start_time": "2026-01-01T00:00:02",
-            }),
-            Record(index=2, data={
-                "trace_id": "t1",
-                "name": "llm",
-                "parent_id": "root-id",
-                "inputs": {"messages": [
-                    {"role": "system", "content": "Be helpful."},
-                    {"role": "user", "content": "What is X?"},
-                ]},
-                "outputs": {"text": "X is Y."},
-                "start_time": "2026-01-01T00:00:03",
-            }),
+            Record(
+                index=0,
+                data={
+                    "trace_id": "t1",
+                    "name": "root",
+                    "parent_id": None,
+                    "inputs": {"query": "What is X?"},
+                    "outputs": {"answer": "X is Y."},
+                    "start_time": "2026-01-01T00:00:01",
+                },
+            ),
+            Record(
+                index=1,
+                data={
+                    "trace_id": "t1",
+                    "name": "retriever",
+                    "parent_id": "root-id",
+                    "outputs": {
+                        "documents": [
+                            {"text": "Doc about X", "score": 0.9},
+                            {"text": "More about X", "score": 0.8},
+                        ]
+                    },
+                    "start_time": "2026-01-01T00:00:02",
+                },
+            ),
+            Record(
+                index=2,
+                data={
+                    "trace_id": "t1",
+                    "name": "llm",
+                    "parent_id": "root-id",
+                    "inputs": {
+                        "messages": [
+                            {"role": "system", "content": "Be helpful."},
+                            {"role": "user", "content": "What is X?"},
+                        ]
+                    },
+                    "outputs": {"text": "X is Y."},
+                    "start_time": "2026-01-01T00:00:03",
+                },
+            ),
             # Second trace group
-            Record(index=3, data={
-                "trace_id": "t2",
-                "name": "root2",
-                "parent_id": None,
-                "inputs": {"query": "What is Z?"},
-                "outputs": {"answer": "Z is W."},
-                "start_time": "2026-01-01T00:01:01",
-            }),
-            Record(index=4, data={
-                "trace_id": "t2",
-                "name": "retriever2",
-                "parent_id": "root2-id",
-                "outputs": {"documents": [
-                    {"text": "Doc about Z", "score": 0.95},
-                ]},
-                "start_time": "2026-01-01T00:01:02",
-            }),
+            Record(
+                index=3,
+                data={
+                    "trace_id": "t2",
+                    "name": "root2",
+                    "parent_id": None,
+                    "inputs": {"query": "What is Z?"},
+                    "outputs": {"answer": "Z is W."},
+                    "start_time": "2026-01-01T00:01:01",
+                },
+            ),
+            Record(
+                index=4,
+                data={
+                    "trace_id": "t2",
+                    "name": "retriever2",
+                    "parent_id": "root2-id",
+                    "outputs": {
+                        "documents": [
+                            {"text": "Doc about Z", "score": 0.95},
+                        ]
+                    },
+                    "start_time": "2026-01-01T00:01:02",
+                },
+            ),
         ]
         self.store = RecordStore(records=records)
         self.assembled = self.store.maybe_assemble_traces()
@@ -219,11 +243,14 @@ class TestSyntheticTraceAssembly:
 
 # -- Edge case: single record store should not assemble -----------------------
 
+
 class TestSingleRecordNoAssembly:
     def test_single_record(self) -> None:
-        store = RecordStore(records=[
-            Record(index=0, data={"trace_id": "t1", "value": "hello"}),
-        ])
+        store = RecordStore(
+            records=[
+                Record(index=0, data={"trace_id": "t1", "value": "hello"}),
+            ]
+        )
         assembled = store.maybe_assemble_traces()
         assert len(assembled) == 1
         assert assembled[0].data == store[0].data
@@ -231,19 +258,35 @@ class TestSingleRecordNoAssembly:
 
 # -- Edge case: homogeneous records with shared ID should not assemble --------
 
+
 class TestHomogeneousSharedIdNoAssembly:
     def test_same_structure(self) -> None:
         """Records share a group ID but all have the same key set."""
         records = [
-            Record(index=0, data={
-                "group": "g1", "name": "Alice", "score": 0.9,
-            }),
-            Record(index=1, data={
-                "group": "g1", "name": "Bob", "score": 0.8,
-            }),
-            Record(index=2, data={
-                "group": "g2", "name": "Charlie", "score": 0.7,
-            }),
+            Record(
+                index=0,
+                data={
+                    "group": "g1",
+                    "name": "Alice",
+                    "score": 0.9,
+                },
+            ),
+            Record(
+                index=1,
+                data={
+                    "group": "g1",
+                    "name": "Bob",
+                    "score": 0.8,
+                },
+            ),
+            Record(
+                index=2,
+                data={
+                    "group": "g2",
+                    "name": "Charlie",
+                    "score": 0.7,
+                },
+            ),
         ]
         store = RecordStore(records=records)
         assembled = store.maybe_assemble_traces()
