@@ -127,15 +127,15 @@ class RecordStore:
     @classmethod
     def _load_parquet(cls, path: Path) -> RecordStore:
         try:
-            import pyarrow.parquet as pq
+            import polars as pl
         except ImportError:
             raise SystemExit(
-                "Parquet support requires pyarrow. Install it with: uv pip install pyarrow"
+                "Parquet support requires polars. Install it with: uv pip install polars"
             )
-        table = pq.read_table(path)
+        df = pl.read_parquet(path)
         records = [
             Record(index=i, data=row)
-            for i, row in enumerate(table.to_pylist())
+            for i, row in enumerate(df.to_dicts())
         ]
         return cls(records=records, skipped=0, path=path)
 
