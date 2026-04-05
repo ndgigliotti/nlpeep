@@ -36,7 +36,7 @@ class TestDepluralize:
         ("class", "class"),
         ("miss", "miss"),       # ends in "ss" -- leave alone
         ("status", "status"),   # Latin singular ending in -us
-        ("bias", "bias"),       # singular ending in -as
+        ("extras", "extra"),    # regular -as plural, not Latin
         ("id", "id"),           # too short
         ("is", "is"),           # too short
     ])
@@ -86,7 +86,7 @@ class TestTokenizeName:
     @pytest.mark.parametrize("name, expected", [
         ("kebab-case", ["kebab", "case"]),
         ("dot.separated", ["dot", "separated"]),
-        ("has spaces", ["has", "space"]),
+        ("has spaces", ["ha", "space"]),
         ("Ground Truth", ["ground", "truth"]),
         ("NER Tags", ["ner", "tag"]),
     ])

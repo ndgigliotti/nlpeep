@@ -88,8 +88,8 @@ def _depluralize(token: str) -> str:
     if token.endswith("sses") or token.endswith("xes") or token.endswith("zes"):
         return token[:-2]             # "classes" -> "class", "boxes" -> "box"
     # Skip words that are likely singular despite ending in -s.
-    if token.endswith(("us", "is", "as", "ss")):
-        return token                  # "status", "analysis", "bias", "miss"
+    if token.endswith(("us", "is", "ss")):
+        return token                  # "status", "analysis", "miss"
     if token.endswith("s"):
         return token[:-1]             # "metrics" -> "metric"
     return token
