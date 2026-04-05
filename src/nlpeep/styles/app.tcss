@@ -263,7 +263,7 @@ MappingModal {
 }
 
 MappingModal #modal-container {
-    width: 80;
+    width: 110;
     max-height: 80%;
     border: thick $accent;
     background: $panel;

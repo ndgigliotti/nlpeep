@@ -62,10 +62,13 @@ class RecordContent(Widget):
                 if len(all_for_role) > 1:
                     # Multiple fields mapped to this role -- group into one dict
                     grouped_values: dict[str, Any] = {}
+                    grouped_sub_fields: dict[str, str] = {}
                     for m in all_for_role:
                         val = record.get_path(m.json_path)
                         if val is not None:
                             grouped_values[m.json_path] = val
+                            if m.metric_scale is not None:
+                                grouped_sub_fields[m.json_path] = m.metric_scale.value
                     if grouped_values:
                         yield TabPane(
                             role.display_name,
@@ -73,6 +76,7 @@ class RecordContent(Widget):
                                 field_name=role.display_name,
                                 value=grouped_values,
                                 role=role,
+                                sub_fields=grouped_sub_fields,
                                 show_label=False,
                             ),
                         )
@@ -91,6 +95,7 @@ class RecordContent(Widget):
                         role=role,
                         sub_fields=role_mapping.sub_fields,
                         show_label=False,
+                        metric_scale=role_mapping.metric_scale,
                     ),
                 )
 

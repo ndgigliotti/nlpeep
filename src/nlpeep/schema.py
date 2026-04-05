@@ -47,6 +47,13 @@ class FieldArchetype(str, Enum):
     NESTED_BLOB = "nested_blob"
 
 
+class MetricScale(str, Enum):
+    """Scale of a numeric metric field."""
+    UNIT = "unit"         # [0, 1]
+    PERCENT = "percent"   # [0, 100]
+    UNKNOWN = "unknown"   # scale not determined
+
+
 # Patterns for name-based auto-detection, ordered by specificity
 _ROLE_PATTERNS: list[tuple[FieldRole, re.Pattern[str]]] = [
     (FieldRole.ID, re.compile(r"^(id|_id|record_id|example_id|idx|uuid)$", re.I)),
@@ -71,6 +78,7 @@ class FieldMapping:
     sub_fields: dict[str, str] = field(default_factory=dict)
     confidence: float = 0.0
     archetype: FieldArchetype | None = None
+    metric_scale: MetricScale | None = None
 
     def __post_init__(self) -> None:
         if not self.display_name:
@@ -171,12 +179,20 @@ class SchemaMapping:
                 config["mapping"][f"{role_val}_fields"] = role_sub_fields[role_val]
             if role_val in role_display:
                 config["display"][role_val] = role_display[role_val]
+        # Persist metric scales
+        scales: dict[str, str] = {}
+        for m in self.mappings:
+            if m.metric_scale is not None:
+                scales[m.json_path] = m.metric_scale.value
+        if scales:
+            config["metric_scales"] = scales
         return config
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> SchemaMapping:
         mapping_section = config.get("mapping", {})
         display_section = config.get("display", {})
+        scales_section = config.get("metric_scales", {})
         mappings: list[FieldMapping] = []
 
         for role in FieldRole:
@@ -191,12 +207,18 @@ class SchemaMapping:
             paths = path if isinstance(path, list) else [path]
             for p in paths:
                 if isinstance(p, str):
+                    scale_str = scales_section.get(p)
+                    try:
+                        metric_scale = MetricScale(scale_str) if scale_str else None
+                    except ValueError:
+                        metric_scale = None
                     mappings.append(FieldMapping(
                         json_path=p,
                         role=role,
                         display_name=display_name,
                         sub_fields=sub_fields if isinstance(sub_fields, dict) else {},
                         confidence=1.0,
+                        metric_scale=metric_scale,
                     ))
 
         return cls(mappings=mappings)
@@ -298,12 +320,14 @@ class SchemaMapping:
                 continue
             samples = path_samples.get(dot_path, [])
             leaf = dot_path.rsplit(".", 1)[-1]
-            if _is_score_like_field(leaf, samples):
+            scale = _is_score_like_field(leaf, samples)
+            if scale is not None:
                 presence = path_counts[dot_path] / total
                 mappings.append(FieldMapping(
                     json_path=dot_path,
                     role=FieldRole.METRICS,
                     confidence=0.6 * presence,
+                    metric_scale=scale,
                 ))
 
         # Pass 4: Classify archetypes for all discovered paths.
@@ -375,11 +399,16 @@ def _classify_archetype(path: str, samples: list[Any], total_records: int) -> Fi
             if unique == len(samples) and avg_len < 100:
                 return FieldArchetype.IDENTIFIER
 
-    # -- score: float in bounded range [0, 1] --
+    # -- score: float in bounded range [0, 1] or [0, 100] for known metric names --
     numeric = [s for s in samples if isinstance(s, (int, float)) and not isinstance(s, bool)]
     if numeric and len(numeric) == len(samples):
         if all(0 <= v <= 1 for v in numeric) and any(isinstance(v, float) for v in numeric):
             return FieldArchetype.SCORE
+        if all(0 <= v <= 100 for v in numeric) and any(v > 1 for v in numeric):
+            leaf = path.rsplit(".", 1)[-1]
+            key_lower = leaf.lower().replace("_", "").replace("-", "")
+            if any(sub in key_lower for sub in _SCORE_SUBSTRINGS):
+                return FieldArchetype.SCORE
 
     # -- score_dict: dict where all values are numeric --
     if all(isinstance(s, dict) for s in samples):
@@ -572,16 +601,19 @@ _SCORE_SUBSTRINGS = {
 }
 
 
-def _is_score_like_field(key: str, samples: list[Any]) -> bool:
-    """Check if a key name contains score-like substrings and values are floats in [0,1]."""
+def _is_score_like_field(key: str, samples: list[Any]) -> MetricScale | None:
+    """Check if a key name contains score-like substrings and infer the scale."""
     key_lower = key.lower().replace("_", "").replace("-", "")
     if not any(sub in key_lower for sub in _SCORE_SUBSTRINGS):
-        return False
-    # Check that sampled values are floats in [0, 1]
+        return None
     numeric_samples = [s for s in samples if isinstance(s, (int, float)) and not isinstance(s, bool)]
     if not numeric_samples:
-        return False
-    return all(0 <= v <= 1 for v in numeric_samples)
+        return None
+    if all(0 <= v <= 1 for v in numeric_samples):
+        return MetricScale.UNIT
+    if all(0 <= v <= 100 for v in numeric_samples) and any(v > 1 for v in numeric_samples):
+        return MetricScale.PERCENT
+    return None
 
 
 def _detect_doc_subfields(samples: list[Any]) -> dict[str, str]:

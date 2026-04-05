@@ -8,7 +8,7 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 from nlpeep.renderers import classify_value, render_value
-from nlpeep.schema import FieldArchetype, FieldRole
+from nlpeep.schema import FieldArchetype, FieldRole, MetricScale
 
 
 class FieldPanel(Widget):
@@ -34,6 +34,7 @@ class FieldPanel(Widget):
         sub_fields: dict[str, str] | None = None,
         show_label: bool = True,
         archetype: FieldArchetype | None = None,
+        metric_scale: MetricScale | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
@@ -43,11 +44,12 @@ class FieldPanel(Widget):
         self.sub_fields = sub_fields or {}
         self.show_label = show_label
         self.archetype = archetype
+        self.metric_scale = metric_scale
 
     def compose(self) -> ComposeResult:
         try:
             vtype = classify_value(self.value, self.field_name, self.role, self.archetype)
-            widget = render_value(self.value, vtype, self.field_name, self.sub_fields)
+            widget = render_value(self.value, vtype, self.field_name, self.sub_fields, self.metric_scale)
         except Exception:
             import json
             fallback = json.dumps(self.value, indent=2, ensure_ascii=False, default=str)

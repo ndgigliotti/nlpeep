@@ -10,7 +10,7 @@ from rich.text import Text
 from textual.widget import Widget
 from textual.widgets import DataTable, Markdown, Static, Tree, Collapsible
 
-from nlpeep.schema import FieldArchetype, FieldRole
+from nlpeep.schema import FieldArchetype, FieldRole, MetricScale
 
 
 class ValueType(Enum):
@@ -148,43 +148,84 @@ def _looks_like_markdown(text: str) -> bool:
     return any(indicator in text for indicator in indicators)
 
 
-def render_value(value: Any, value_type: ValueType, field_name: str = "", sub_fields: dict[str, str] | None = None) -> Widget:
+def _score_color(value: float, scale: MetricScale | None) -> str | None:
+    """Return a Rich color token for a metric value, or None if scale is unknown."""
+    if scale is None or scale == MetricScale.UNKNOWN:
+        return None
+    norm = value / 100.0 if scale == MetricScale.PERCENT else value
+    if not (0 <= norm <= 1):
+        return None
+    if norm >= 0.8:
+        return "$success"
+    if norm >= 0.5:
+        return "$warning"
+    return "$error"
+
+
+def render_value(
+    value: Any,
+    value_type: ValueType,
+    field_name: str = "",
+    sub_fields: dict[str, str] | None = None,
+    metric_scale: MetricScale | None = None,
+) -> Widget:
     """Return a Textual Widget for the given value and classification."""
     try:
-        return _RENDERERS[value_type](value, field_name, sub_fields or {})
+        return _RENDERERS[value_type](value, field_name, sub_fields or {}, metric_scale)
     except Exception:
-        return _render_json_raw(value, field_name, {})
+        return _render_json_raw(value, field_name, {}, None)
 
 
-def _render_short_text(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
+def _render_short_text(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
     return Static(str(value), classes="field-short-text")
 
 
-def _render_long_text(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
+def _render_long_text(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
     return Static(str(value), classes="field-long-text")
 
 
-def _render_markdown(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
+def _render_markdown(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
     return Markdown(str(value), classes="field-markdown")
 
 
-def _render_score(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
-    from nlpeep.widgets.score_bar import ScoreBar
-    return ScoreBar(value=float(value), label=field_name)
+def _render_score(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
+    v = float(value)
+    formatted = f"{v:.3f}"
+    color = _score_color(v, metric_scale)
+    if color:
+        text = f"[bold]{escape(field_name)}[/bold]  [{color}]{formatted}[/{color}]"
+    else:
+        text = f"[bold]{escape(field_name)}[/bold]  {formatted}"
+    return Static(text, classes="field-metrics")
 
 
-def _render_metric_dict(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
-    from nlpeep.widgets.score_bar import ScoreBar
-    from textual.containers import Vertical
+def _render_metric_dict(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
     numeric = {k: float(v) for k, v in value.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
     if not numeric:
-        return _render_json_raw(value, field_name, sub_fields)
+        return _render_json_raw(value, field_name, sub_fields, None)
     label_width = max(len(k) for k in numeric)
-    bars = [ScoreBar(value=v, label=k, label_width=label_width) for k, v in numeric.items()]
-    return Vertical(*bars, classes="field-metrics")
+    lines: list[str] = []
+    for k, v in numeric.items():
+        padded = k.rjust(label_width)
+        formatted = f"{v:.3f}"
+        # Per-key scale from sub_fields, fall back to overall metric_scale
+        key_scale_str = sub_fields.get(k)
+        if key_scale_str:
+            try:
+                key_scale = MetricScale(key_scale_str)
+            except ValueError:
+                key_scale = metric_scale
+        else:
+            key_scale = metric_scale
+        color = _score_color(v, key_scale)
+        if color:
+            lines.append(f"[bold]{escape(padded)}[/bold]  [{color}]{formatted}[/{color}]")
+        else:
+            lines.append(f"[bold]{escape(padded)}[/bold]  {formatted}")
+    return Static("\n".join(lines), classes="field-metrics")
 
 
-def _render_doc_list(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
+def _render_doc_list(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
     from nlpeep.widgets.doc_card import DocCard
     from textual.containers import Vertical
     cards = []
@@ -196,7 +237,7 @@ def _render_doc_list(value: Any, field_name: str, sub_fields: dict[str, str]) ->
     return Vertical(*cards, classes="field-docs")
 
 
-def _render_chat_messages(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
+def _render_chat_messages(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
     from textual.containers import Vertical
     widgets: list[Widget] = []
     for msg in value:
@@ -232,7 +273,7 @@ def _render_chat_messages(value: Any, field_name: str, sub_fields: dict[str, str
     return Vertical(*widgets, classes="field-chat")
 
 
-def _render_step_list(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
+def _render_step_list(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
     from textual.containers import Vertical
     widgets: list[Widget] = []
     for i, step in enumerate(value):
@@ -262,7 +303,7 @@ def _render_step_list(value: Any, field_name: str, sub_fields: dict[str, str]) -
     return Vertical(*widgets, classes="field-steps")
 
 
-def _render_flat_dict(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
+def _render_flat_dict(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
     table = DataTable(classes="field-flat-dict")
     table.add_columns("Field", "Value")
     for k, v in value.items():
@@ -270,7 +311,7 @@ def _render_flat_dict(value: Any, field_name: str, sub_fields: dict[str, str]) -
     return table
 
 
-def _render_nested_dict(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
+def _render_nested_dict(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
     tree: Tree[str] = Tree(field_name or "Object", classes="field-tree")
     _build_tree(tree.root, value)
     tree.root.expand_all()
@@ -296,7 +337,7 @@ def _build_tree(node: Any, data: Any) -> None:
         node.add_leaf(escape(str(data)))
 
 
-def _render_simple_list(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
+def _render_simple_list(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
     items = [f"  [dim]{BULLET}[/dim] {escape(str(item))}" for item in value]
     return Static("\n".join(items), classes="field-list")
 
@@ -304,7 +345,7 @@ def _render_simple_list(value: Any, field_name: str, sub_fields: dict[str, str])
 BULLET = "\u2022"
 
 
-def _render_table(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
+def _render_table(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
     if not value:
         return Static("(empty)", classes="field-table")
 
@@ -334,7 +375,7 @@ def _render_table(value: Any, field_name: str, sub_fields: dict[str, str]) -> Wi
     return table
 
 
-def _render_json_raw(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
+def _render_json_raw(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
     text = json.dumps(value, indent=2, ensure_ascii=False, default=str)
     syntax = Syntax(text, "json", theme="monokai", line_numbers=False)
     return Static(syntax, classes="field-json")

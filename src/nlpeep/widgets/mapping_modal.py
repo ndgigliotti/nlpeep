@@ -11,10 +11,17 @@ from textual.widgets import Button, Label, Select, Static
 
 from nlpeep.config import save_config
 from nlpeep.data import RecordStore
-from nlpeep.schema import FieldMapping, FieldRole, SchemaMapping
+from nlpeep.schema import FieldMapping, FieldRole, MetricScale, SchemaMapping
 
 
 _ROLE_OPTIONS = [(role.display_name, role.value) for role in FieldRole]
+
+_SCALE_OPTIONS: list[tuple[str, str]] = [
+    ("Auto", "auto"),
+    ("Unit [0,1]", MetricScale.UNIT.value),
+    ("Percent [0,100]", MetricScale.PERCENT.value),
+    ("Unknown", MetricScale.UNKNOWN.value),
+]
 
 
 class MappingModal(ModalScreen[SchemaMapping | None]):
@@ -25,7 +32,7 @@ class MappingModal(ModalScreen[SchemaMapping | None]):
         align: center middle;
     }
     MappingModal #modal-container {
-        width: 90;
+        width: 110;
         max-height: 80%;
         border: thick $primary;
         background: $surface;
@@ -68,6 +75,12 @@ class MappingModal(ModalScreen[SchemaMapping | None]):
     MappingModal .role-select {
         width: 30;
     }
+    MappingModal .scale-select {
+        width: 20;
+    }
+    MappingModal .header-scale {
+        width: 20;
+    }
     MappingModal .confidence-tag {
         width: 14;
         padding: 1 0 0 1;
@@ -103,11 +116,15 @@ class MappingModal(ModalScreen[SchemaMapping | None]):
         self.store = store
         self.current_mapping = mapping
         self._selects: dict[str, Select[str]] = {}
+        self._scale_selects: dict[str, Select[str]] = {}
         self._group_labels: dict[str, Label] = {}
         # Build confidence lookup from existing FieldMapping objects
         self._confidence: dict[str, float] = {}
+        self._current_scales: dict[str, str] = {}
         for m in self.current_mapping.mappings:
             self._confidence[m.json_path] = m.confidence
+            if m.metric_scale is not None:
+                self._current_scales[m.json_path] = m.metric_scale.value
 
     def compose(self) -> ComposeResult:
         field_summary = self.store.field_summary()
@@ -134,6 +151,10 @@ class MappingModal(ModalScreen[SchemaMapping | None]):
                         "Role",
                         classes="header-label header-role",
                     )
+                    yield Label(
+                        "Scale",
+                        classes="header-label header-scale",
+                    )
                 # Sort fields so shallower paths appear first, and
                 # nested paths are visually grouped under their parent.
                 sorted_fields = sorted(
@@ -156,6 +177,17 @@ class MappingModal(ModalScreen[SchemaMapping | None]):
                     # Confidence tag for auto-detected mappings
                     conf = self._confidence.get(field_name, 0.0)
                     conf_text = f"(auto {conf:.2f})" if conf > 0 and conf < 1.0 else ""
+                    # Scale selector (visible only for metrics role)
+                    scale_val = self._current_scales.get(field_name, "auto")
+                    scale_select = Select(
+                        _SCALE_OPTIONS,
+                        value=scale_val,
+                        allow_blank=False,
+                        classes="scale-select",
+                        id=f"scale-{safe_id}",
+                    )
+                    scale_select.display = current_role == FieldRole.METRICS.value
+                    self._scale_selects[field_name] = scale_select
                     # Group hint label (updated reactively)
                     group_label = Label("", classes="group-hint", id=f"group-{safe_id}")
                     self._group_labels[field_name] = group_label
@@ -166,6 +198,7 @@ class MappingModal(ModalScreen[SchemaMapping | None]):
                         yield Label(display_name, classes="field-name")
                         yield Label(type_str, classes="field-type")
                         yield select
+                        yield scale_select
                         yield Label(conf_text, classes="confidence-tag")
                         yield group_label
 
@@ -175,13 +208,15 @@ class MappingModal(ModalScreen[SchemaMapping | None]):
                 yield Button("Cancel", variant="default", id="btn-cancel")
 
     def on_mount(self) -> None:
-        """Update group hints once all widgets are mounted."""
+        """Update group hints and scale visibility once all widgets are mounted."""
         self._update_group_hints()
+        self._update_scale_visibility()
 
     @on(Select.Changed)
     def _on_role_changed(self, event: Select.Changed) -> None:
-        """When any role Select changes, recalculate group hints."""
+        """When any role Select changes, recalculate group hints and scale visibility."""
         self._update_group_hints()
+        self._update_scale_visibility()
 
     def _update_group_hints(self) -> None:
         """Scan all selects, count roles, and update group-hint labels."""
@@ -208,6 +243,14 @@ class MappingModal(ModalScreen[SchemaMapping | None]):
             else:
                 label.update("")
 
+    def _update_scale_visibility(self) -> None:
+        """Show scale selects only for fields with role == METRICS."""
+        for field_name, role_select in self._selects.items():
+            scale_select = self._scale_selects.get(field_name)
+            if scale_select is None:
+                continue
+            scale_select.display = role_select.value == FieldRole.METRICS.value
+
     def _build_mapping(self) -> SchemaMapping:
         mappings: list[FieldMapping] = []
         for field_name, select in self._selects.items():
@@ -221,11 +264,23 @@ class MappingModal(ModalScreen[SchemaMapping | None]):
                 None,
             )
             sub_fields = existing.sub_fields if existing else {}
+            # Determine metric scale from the scale select
+            metric_scale: MetricScale | None = None
+            if role == FieldRole.METRICS:
+                scale_select = self._scale_selects.get(field_name)
+                if scale_select and scale_select.value != "auto":
+                    try:
+                        metric_scale = MetricScale(scale_select.value)
+                    except ValueError:
+                        pass
+                elif existing and existing.metric_scale is not None:
+                    metric_scale = existing.metric_scale
             mappings.append(FieldMapping(
                 json_path=field_name,
                 role=role,
                 sub_fields=sub_fields,
                 confidence=1.0,
+                metric_scale=metric_scale,
             ))
         return SchemaMapping(mappings=mappings)
 
