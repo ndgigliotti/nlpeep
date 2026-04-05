@@ -56,35 +56,59 @@ class MetricScale(str, Enum):
     UNKNOWN = "unknown"   # scale not determined
 
 
-# Patterns for name-based auto-detection, ordered by specificity
-_ROLE_PATTERNS: list[tuple[FieldRole, re.Pattern[str]]] = [
-    (FieldRole.ID, re.compile(r"^(id|_id|record_id|example_id|idx|uuid)$", re.I)),
-    (FieldRole.QUERY, re.compile(
-        r"^(query|question|prompt|user_input|q|user_query|search_query)$", re.I,
-    )),
-    (FieldRole.INPUT, re.compile(
-        r"^(input|text|article|document|source|source_text|sentence"
-        r"|premise|hypothesis|tokens|words)$", re.I,
-    )),
-    (FieldRole.RESPONSE, re.compile(
-        r"^(response|answer|output|result|generation|completion|predicted"
-        r"|llm_response|assistant|reply"
-        r"|summary|abstract|target_text|translation)$", re.I,
-    )),
-    (FieldRole.GROUND_TRUTH, re.compile(
-        r"^(ground_truth|expected|gold|reference|target|label|correct_answer"
-        r"|labels|tags|ner_tags|pos_tags|entities|category|class|highlights"
-        r"|sentiment|classification)$", re.I,
-    )),
-    (FieldRole.DOCUMENTS, re.compile(
-        r"^(documents|docs|retrieved_documents|contexts|passages|chunks"
-        r"|retrieved|retrieved_passages|sources|retrieved_chunks"
-        r"|context|passage|paragraph)$", re.I,
-    )),
-    (FieldRole.METRICS, re.compile(r"^(metrics|scores|evaluation|eval_results|eval|evaluations)$", re.I)),
-    (FieldRole.TRACE, re.compile(r"^(trace|steps|tool_calls|llm_calls|messages|chain|actions|trajectory|history|tool_use|_trace_spans)$", re.I)),
-    (FieldRole.METADATA, re.compile(r"^(metadata|meta|info|config|params|settings|extras)$", re.I)),
+# Split camelCase, snake_case, kebab-case, dot.separated into tokens.
+_CAMEL_RE = re.compile(r"([a-z0-9])([A-Z])")
+
+
+def _tokenize_name(name: str) -> list[str]:
+    """Split a field name into lowercase tokens."""
+    name = _CAMEL_RE.sub(r"\1_\2", name)
+    return [t.lower() for t in re.split(r"[_\-.\s]+", name) if t]
+
+
+# Token-based role keywords.  A field matches a role when any of its
+# tokens appears in the keyword set.  Checked in order; first match wins.
+_ROLE_KEYWORDS: list[tuple[FieldRole, frozenset[str]]] = [
+    (FieldRole.ID, frozenset({"id", "idx", "uuid"})),
+    (FieldRole.QUERY, frozenset({
+        "query", "question", "prompt",
+    })),
+    (FieldRole.INPUT, frozenset({
+        "input", "article", "source", "sentence",
+        "premise", "hypothesis", "tokens", "words",
+    })),
+    (FieldRole.RESPONSE, frozenset({
+        "response", "answer", "output", "result", "generation",
+        "completion", "predicted", "reply",
+        "summary", "abstract", "translation",
+    })),
+    (FieldRole.GROUND_TRUTH, frozenset({
+        "truth", "expected", "gold", "reference", "target",
+        "label", "tags", "entities", "highlights",
+        "sentiment", "classification", "category", "class",
+    })),
+    (FieldRole.DOCUMENTS, frozenset({
+        "documents", "docs", "contexts", "passages", "chunks",
+        "retrieved", "context", "passage", "paragraph",
+    })),
+    (FieldRole.METRICS, frozenset({
+        "metrics", "scores", "evaluation", "eval",
+    })),
+    (FieldRole.TRACE, frozenset({
+        "trace", "steps", "trajectory", "history",
+    })),
+    (FieldRole.METADATA, frozenset({
+        "metadata", "meta", "config", "params", "settings", "extras",
+    })),
 ]
+
+# Very short or ambiguous tokens that only match as the full field name.
+_EXACT_KEYWORDS: dict[str, FieldRole] = {
+    "q": FieldRole.QUERY,
+    "text": FieldRole.INPUT,
+    "document": FieldRole.INPUT,
+    "info": FieldRole.METADATA,
+}
 
 # Maximum recursion depth for nested field detection
 _MAX_NEST_DEPTH = 4
@@ -272,32 +296,39 @@ class SchemaMapping:
         mappings: list[FieldMapping] = []
         claimed_roles: set[FieldRole] = set()
 
-        # Pass 1: Name-based matching on leaf names and full paths.
+        # Pass 1: Token-based keyword matching on field names.
         # Sort paths so shallower ones come first (fewer dots = shallower).
         sorted_paths = sorted(path_counts, key=lambda p: p.count("."))
         for dot_path in sorted_paths:
-            # Use the original key name (not the flattened path leaf) for
-            # matching.  For Phoenix-style data where keys contain dots
-            # (e.g. "input.value"), this lets us match against "input".
+            # Build candidate names from the original key (preserves
+            # Phoenix-style dotted keys like "input.value") and the
+            # flattened leaf name.
             original_key = path_keys.get(dot_path, dot_path.rsplit(".", 1)[-1])
             candidates = [original_key]
             if "." in original_key:
                 candidates.extend(original_key.split("."))
 
-            samples = path_samples.get(dot_path, [])
+            # Tokenize all candidate names for keyword matching.
+            tokens: set[str] = set()
+            for c in candidates:
+                tokens.update(_tokenize_name(c))
 
+            samples = path_samples.get(dot_path, [])
             is_nested = "." in dot_path
 
-            for role, pattern in _ROLE_PATTERNS:
+            # Check exact-only keywords first (very short/ambiguous tokens).
+            exact_lower = original_key.lower()
+            exact_role = _EXACT_KEYWORDS.get(exact_lower)
+
+            for role, keywords in _ROLE_KEYWORDS:
                 if role in claimed_roles:
                     continue
-                if not any(pattern.match(c) for c in candidates):
+                # Match if any token hits the keyword set, or the exact
+                # field name matched this role via _EXACT_KEYWORDS.
+                if not (tokens & keywords or exact_role == role):
                     continue
-                # Depth guard: generic names like "text" are ambiguous
-                # when nested (e.g. "answers.text").  Skip nested
-                # matches for INPUT only, since QUERY and RESPONSE
-                # names (question, prompt, response, etc.) are
-                # specific enough to be meaningful at any depth.
+                # Depth guard: generic INPUT tokens ("text", "source")
+                # are ambiguous when nested (e.g. "answers.text").
                 if is_nested and role == FieldRole.INPUT:
                     continue
                 # Type guard: input/output roles need text-like samples
