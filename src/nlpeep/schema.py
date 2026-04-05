@@ -65,11 +65,27 @@ def _tokenize_name(name: str) -> list[str]:
     """Split a field name into lowercase tokens.
 
     Handles camelCase, PascalCase, snake_case (including multiple
-    underscores), kebab-case, dot.separated, and spaces.
+    underscores), kebab-case, dot.separated, and spaces.  Each token
+    is also reduced to a simple singular form so keyword sets only
+    need the singular ("metric" matches "metrics").
     """
     name = _CAMEL_LOWER_UPPER.sub(r"\1_\2", name)
     name = _CAMEL_UPPER_RUN.sub(r"\1_\2", name)
-    return [t.lower() for t in re.split(r"[_\-.\s]+", name) if t]
+    tokens = [t.lower() for t in re.split(r"[_\-.\s]+", name) if t]
+    return [_depluralize(t) for t in tokens]
+
+
+def _depluralize(token: str) -> str:
+    """Cheap singular reduction -- covers regular English plurals."""
+    if len(token) <= 2:
+        return token
+    if token.endswith("ies") and len(token) > 4:
+        return token[:-3] + "y"       # "entities" -> "entity"
+    if token.endswith("ses") or token.endswith("xes") or token.endswith("zes"):
+        return token[:-2]             # "classes" -> "class"
+    if token.endswith("s") and not token.endswith("ss"):
+        return token[:-1]             # "metrics" -> "metric"
+    return token
 
 
 # Token-based role keywords.  A field matches a role when any of its
@@ -86,7 +102,7 @@ _ROLE_KEYWORDS: list[tuple[FieldRole, frozenset[str]]] = [
         "input", "source", "original",
         "article", "sentence", "utterance", "statement",
         "premise", "hypothesis",
-        "tokens", "words", "token",
+        "token", "word",
     })),
     (FieldRole.RESPONSE, frozenset({
         "response", "output", "generation",
@@ -100,27 +116,27 @@ _ROLE_KEYWORDS: list[tuple[FieldRole, frozenset[str]]] = [
         "truth", "expected", "gold", "reference", "target",
         "actual",
         "label", "annotation", "annotated",
-        "tags", "entities", "spans", "slots",
+        "tag", "entity", "span", "slot",
         "sentiment", "classification", "category", "class",
         "topic", "intent", "emotion",
-        "highlights",
+        "highlight",
     })),
     (FieldRole.DOCUMENTS, frozenset({
-        "documents", "docs", "contexts", "passages",
-        "chunks", "retrieved", "context",
-        "paragraph", "excerpts", "snippets",
+        "document", "doc", "context", "passage",
+        "chunk", "retrieved",
+        "paragraph", "excerpt", "snippet",
         "evidence",
     })),
     (FieldRole.METRICS, frozenset({
-        "metrics", "scores", "evaluation", "eval",
+        "metric", "score", "evaluation", "eval",
     })),
     (FieldRole.TRACE, frozenset({
-        "trace", "steps", "trajectory", "history",
-        "chain", "actions",
+        "trace", "step", "trajectory", "history",
+        "chain", "action",
     })),
     (FieldRole.METADATA, frozenset({
-        "metadata", "meta", "config", "params",
-        "settings", "extras", "options", "hyperparams",
+        "metadata", "meta", "config", "param",
+        "setting", "extra", "option", "hyperparam",
     })),
 ]
 

@@ -3,13 +3,42 @@ from __future__ import annotations
 
 import pytest
 
-from nlpeep.schema import _tokenize_name, _ROLE_KEYWORDS, _EXACT_KEYWORDS, FieldRole
+from nlpeep.schema import (
+    _depluralize,
+    _tokenize_name,
+    _ROLE_KEYWORDS,
+    _EXACT_KEYWORDS,
+    FieldRole,
+)
+
+
+# -- _depluralize -------------------------------------------------------------
+
+class TestDepluralize:
+    @pytest.mark.parametrize("token, expected", [
+        ("metrics", "metric"),
+        ("scores", "score"),
+        ("documents", "document"),
+        ("passages", "passage"),
+        ("entities", "entity"),
+        ("categories", "category"),
+        ("classes", "class"),
+        ("indexes", "index"),
+        ("steps", "step"),
+        # should not strip
+        ("class", "class"),
+        ("miss", "miss"),       # ends in "ss" -- leave alone
+        ("id", "id"),           # too short
+        ("is", "is"),           # too short
+    ])
+    def test_depluralize(self, token: str, expected: str) -> None:
+        assert _depluralize(token) == expected
 
 
 # -- _tokenize_name ----------------------------------------------------------
 
 class TestTokenizeName:
-    """Verify splitting across naming conventions."""
+    """Verify splitting and depluralization across naming conventions."""
 
     @pytest.mark.parametrize("name, expected", [
         ("snake_case", ["snake", "case"]),
@@ -38,7 +67,7 @@ class TestTokenizeName:
 
     @pytest.mark.parametrize("name, expected", [
         ("HTMLParser", ["html", "parser"]),
-        ("NERTags", ["ner", "tags"]),
+        ("NERTags", ["ner", "tag"]),
         ("URLSource", ["url", "source"]),
         ("ID", ["id"]),
     ])
@@ -48,9 +77,9 @@ class TestTokenizeName:
     @pytest.mark.parametrize("name, expected", [
         ("kebab-case", ["kebab", "case"]),
         ("dot.separated", ["dot", "separated"]),
-        ("has spaces", ["has", "spaces"]),
+        ("has spaces", ["ha", "space"]),
         ("Ground Truth", ["ground", "truth"]),
-        ("NER Tags", ["ner", "tags"]),
+        ("NER Tags", ["ner", "tag"]),
     ])
     def test_other_separators(self, name: str, expected: list[str]) -> None:
         assert _tokenize_name(name) == expected
@@ -68,6 +97,13 @@ class TestTokenizeName:
 
     def test_empty_string(self) -> None:
         assert _tokenize_name("") == []
+
+    def test_plurals_normalized(self) -> None:
+        """Plural field names should reduce to singular tokens."""
+        assert _tokenize_name("retrieved_documents") == ["retrieved", "document"]
+        assert _tokenize_name("ner_tags") == ["ner", "tag"]
+        assert _tokenize_name("entities") == ["entity"]
+        assert _tokenize_name("eval_scores") == ["eval", "score"]
 
 
 # -- keyword matching ---------------------------------------------------------
@@ -140,6 +176,9 @@ class TestKeywordMatching:
         ("evalResults", FieldRole.METRICS),
         ("eval", FieldRole.METRICS),
         ("scores", FieldRole.METRICS),
+        # singular and plural both work via depluralization
+        ("metric", FieldRole.METRICS),
+        ("metrics", FieldRole.METRICS),
     ])
     def test_metrics(self, name: str, expected: FieldRole) -> None:
         assert _match_role(name) == expected
@@ -155,3 +194,10 @@ class TestKeywordMatching:
         not as a token inside a compound name like 'target_text'."""
         assert _match_role("text") == FieldRole.INPUT
         assert _match_role("target_text") == FieldRole.GROUND_TRUTH
+
+    def test_plural_field_names_match(self) -> None:
+        """Plural field names should match singular keywords."""
+        assert _match_role("labels") == FieldRole.GROUND_TRUTH
+        assert _match_role("passages") == FieldRole.DOCUMENTS
+        assert _match_role("steps") == FieldRole.TRACE
+        assert _match_role("settings") == FieldRole.METADATA
