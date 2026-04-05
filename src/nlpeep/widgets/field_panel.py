@@ -7,8 +7,8 @@ from textual.containers import Vertical
 from textual.widget import Widget
 from textual.widgets import Static
 
-from rag_viewer.renderers import classify_value, render_value
-from rag_viewer.schema import FieldRole
+from nlpeep.renderers import classify_value, render_value
+from nlpeep.schema import FieldRole
 
 
 class FieldPanel(Widget):

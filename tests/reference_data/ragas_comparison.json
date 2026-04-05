@@ -1,0 +1,112 @@
+{
+  "ragas_comparison": [
+    {
+      "approach": "Naive RAG",
+      "queries_evaluated": 5,
+      "queries_with_gt": 0,
+      "faithfulness": 0.6,
+      "answer_relevancy": 0.6991038372204086,
+      "context_precision": null,
+      "context_recall": null,
+      "average_score": 0.6495519186102043
+    },
+    {
+      "approach": "Advanced RAG",
+      "queries_evaluated": 5,
+      "queries_with_gt": 0,
+      "faithfulness": 0.5597186147186147,
+      "answer_relevancy": 0.19418846884690205,
+      "context_precision": null,
+      "context_recall": null,
+      "average_score": 0.3769535417827584
+    },
+    {
+      "approach": "BM25 RAG",
+      "queries_evaluated": 5,
+      "queries_with_gt": 0,
+      "faithfulness": 0.6619047619047619,
+      "answer_relevancy": 0.7808520606456995,
+      "context_precision": null,
+      "context_recall": null,
+      "average_score": 0.7213784112752306
+    },
+    {
+      "approach": "FAISS RAG",
+      "queries_evaluated": 5,
+      "queries_with_gt": 0,
+      "faithfulness": 0.8,
+      "answer_relevancy": 0.20685310642435756,
+      "context_precision": null,
+      "context_recall": null,
+      "average_score": 0.5034265532121788
+    },
+    {
+      "approach": "Hybrid RAG",
+      "queries_evaluated": 5,
+      "queries_with_gt": 0,
+      "faithfulness": 0.9436363636363637,
+      "answer_relevancy": 0.14174102726026294,
+      "context_precision": null,
+      "context_recall": null,
+      "average_score": 0.5426886954483133
+    },
+    {
+      "approach": "Corrective RAG",
+      "queries_evaluated": 5,
+      "queries_with_gt": 0,
+      "faithfulness": 0.9555555555555555,
+      "answer_relevancy": 0.233165287891227,
+      "context_precision": null,
+      "context_recall": null,
+      "average_score": 0.5943604217233912
+    },
+    {
+      "approach": "ChromaDB RAG",
+      "queries_evaluated": 5,
+      "queries_with_gt": 0,
+      "faithfulness": 0.0,
+      "answer_relevancy": 0.0,
+      "context_precision": null,
+      "context_recall": null,
+      "average_score": 0.0
+    },
+    {
+      "approach": "Graph RAG",
+      "queries_evaluated": 5,
+      "queries_with_gt": 0,
+      "faithfulness": 0.9436363636363636,
+      "answer_relevancy": 0.15482226703983448,
+      "context_precision": null,
+      "context_recall": null,
+      "average_score": 0.549229315338099
+    },
+    {
+      "approach": "Self RAG",
+      "queries_evaluated": 5,
+      "queries_with_gt": 0,
+      "faithfulness": 0.9777777777777779,
+      "answer_relevancy": 0.23374754378757254,
+      "context_precision": null,
+      "context_recall": null,
+      "average_score": 0.6057626607826752
+    },
+    {
+      "approach": "Agentic RAG",
+      "queries_evaluated": 5,
+      "queries_with_gt": 0,
+      "faithfulness": 0.93,
+      "answer_relevancy": 0.0,
+      "context_precision": null,
+      "context_recall": null,
+      "average_score": 0.465
+    }
+  ],
+  "summary": {
+    "total_approaches_evaluated": 10,
+    "total_approaches_skipped": 0,
+    "total_approaches_with_errors": 0,
+    "best_approach": "BM25 RAG",
+    "best_score": 0.7213784112752306,
+    "ground_truth_queries_available": 23
+  }
+}

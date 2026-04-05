@@ -10,7 +10,7 @@ from rich.text import Text
 from textual.widget import Widget
 from textual.widgets import DataTable, Markdown, Static, Tree, Collapsible
 
-from rag_viewer.schema import FieldRole
+from nlpeep.schema import FieldRole
 
 
 class ValueType(Enum):
@@ -135,12 +135,12 @@ def _render_markdown(value: Any, field_name: str, sub_fields: dict[str, str]) ->
 
 
 def _render_score(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
-    from rag_viewer.widgets.score_bar import ScoreBar
+    from nlpeep.widgets.score_bar import ScoreBar
     return ScoreBar(value=float(value), label=field_name)
 
 
 def _render_metric_dict(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
-    from rag_viewer.widgets.score_bar import ScoreBar
+    from nlpeep.widgets.score_bar import ScoreBar
     from textual.containers import Vertical
     bars = []
     for k, v in value.items():
@@ -152,7 +152,7 @@ def _render_metric_dict(value: Any, field_name: str, sub_fields: dict[str, str])
 
 
 def _render_doc_list(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
-    from rag_viewer.widgets.doc_card import DocCard
+    from nlpeep.widgets.doc_card import DocCard
     from textual.containers import Vertical
     cards = []
     for i, doc in enumerate(value):
@@ -176,11 +176,11 @@ def _render_chat_messages(value: Any, field_name: str, sub_fields: dict[str, str
             # Handle structured content (e.g., tool results)
             content = json.dumps(content, indent=2)
         role_colors = {
-            "system": "#ffb000",
-            "user": "#00e5ff",
-            "assistant": "#00ff88",
-            "tool": "#ff2d95",
-            "function": "#ff2d95",
+            "system": "$warning",
+            "user": "$accent",
+            "assistant": "$success",
+            "tool": "$secondary",
+            "function": "$secondary",
         }
         color = role_colors.get(role, "white")
         header = f"[bold {color}]{escape(role)}[/bold {color}]"

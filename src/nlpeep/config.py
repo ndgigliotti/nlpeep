@@ -6,7 +6,7 @@ from typing import Any
 
 import tomli_w
 
-from rag_viewer.schema import SchemaMapping
+from nlpeep.schema import SchemaMapping
 
 
 def find_config(data_path: Path, explicit: Path | None = None) -> Path | None:
@@ -18,17 +18,17 @@ def find_config(data_path: Path, explicit: Path | None = None) -> Path | None:
     stem = data_path.stem
 
     # Per-file config
-    per_file = parent / f".rag-viewer.{stem}.toml"
+    per_file = parent / f".nlpeep.{stem}.toml"
     if per_file.exists():
         return per_file
 
     # Directory config
-    dir_config = parent / ".rag-viewer.toml"
+    dir_config = parent / ".nlpeep.toml"
     if dir_config.exists():
         return dir_config
 
     # CWD config
-    cwd_config = Path.cwd() / ".rag-viewer.toml"
+    cwd_config = Path.cwd() / ".nlpeep.toml"
     if cwd_config.exists() and cwd_config != dir_config:
         return cwd_config
 
@@ -53,7 +53,7 @@ def save_config(data_path: Path, mapping: SchemaMapping) -> Path:
     """Save mapping as a per-file config. Returns the path written."""
     parent = data_path.parent
     stem = data_path.stem
-    config_path = parent / f".rag-viewer.{stem}.toml"
+    config_path = parent / f".nlpeep.{stem}.toml"
     config = mapping.to_config()
 
     with open(config_path, "wb") as f:

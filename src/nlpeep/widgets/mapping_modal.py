@@ -9,9 +9,9 @@ from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Select, Static
 
-from rag_viewer.config import save_config
-from rag_viewer.data import RecordStore
-from rag_viewer.schema import FieldMapping, FieldRole, SchemaMapping
+from nlpeep.config import save_config
+from nlpeep.data import RecordStore
+from nlpeep.schema import FieldMapping, FieldRole, SchemaMapping
 
 
 _ROLE_OPTIONS = [(role.display_name, role.value) for role in FieldRole]

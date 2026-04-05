@@ -6,19 +6,20 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
+from textual.theme import Theme
 from textual.widgets import Footer, Header, Static
 
-from rag_viewer.config import load_mapping
-from rag_viewer.data import RecordStore
-from rag_viewer.schema import SchemaMapping
-from rag_viewer.widgets.mapping_modal import MappingModal
-from rag_viewer.widgets.navigator import RecordNavigator
-from rag_viewer.widgets.record_view import RecordView
+from nlpeep.config import load_mapping
+from nlpeep.data import RecordStore
+from nlpeep.schema import SchemaMapping
+from nlpeep.widgets.mapping_modal import MappingModal
+from nlpeep.widgets.navigator import RecordNavigator
+from nlpeep.widgets.record_view import RecordView
 
 
-class RagViewerApp(App):
+class NLPeepApp(App):
     CSS_PATH = "styles/app.tcss"
-    TITLE = "RAG VIEWER"
+    TITLE = "NLPEEP"
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
@@ -37,6 +38,23 @@ class RagViewerApp(App):
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
+        self.register_theme(
+            Theme(
+                name="neon-cyberpunk",
+                primary="#00e5ff",
+                secondary="#ff2d95",
+                accent="#00e5ff",
+                warning="#ffb000",
+                error="#ff2d95",
+                success="#00ff88",
+                foreground="#e8f0ff",
+                background="#0a0a0f",
+                surface="#131820",
+                panel="#0d1117",
+                dark=True,
+            )
+        )
+        self.theme = "neon-cyberpunk"
         self._path = path
         self._config_path = config_path
         self._store: RecordStore | None = None

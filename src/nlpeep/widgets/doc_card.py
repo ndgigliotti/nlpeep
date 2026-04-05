@@ -64,21 +64,21 @@ class DocCard(Widget):
                     break
 
         # Build header
-        header_parts = [f"[bold #00e5ff]#{self.rank}[/bold #00e5ff]"]
+        header_parts = [f"[bold $accent]#{self.rank}[/bold $accent]"]
         if score_key and score_key in self.doc:
             score = self.doc[score_key]
             if isinstance(score, (int, float)):
                 if score >= 0.8:
-                    color = "#00ff88"
+                    color = "$success"
                 elif score >= 0.5:
-                    color = "#ffb000"
+                    color = "$warning"
                 else:
-                    color = "#ff2d95"
+                    color = "$error"
                 header_parts.append(f"[bold {color}]{score:.4f}[/bold {color}]")
             else:
                 header_parts.append(str(score))
         if source_key and source_key in self.doc:
-            header_parts.append(f"[dim italic #556677]{escape(str(self.doc[source_key]))}[/dim italic #556677]")
+            header_parts.append(f"[dim italic $text-muted]{escape(str(self.doc[source_key]))}[/dim italic $text-muted]")
 
         yield Static("  ".join(header_parts), classes="doc-header")
 

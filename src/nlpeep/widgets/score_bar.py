@@ -33,13 +33,13 @@ class ScoreBar(Widget):
         empty = self.bar_width - filled
 
         if self.value >= 0.8:
-            color = "#00ff88"
+            color = "$success"
         elif self.value >= 0.5:
-            color = "#ffb000"
+            color = "$warning"
         else:
-            color = "#ff2d95"
+            color = "$error"
 
-        bar = f"[{color}]{'\u2588' * filled}[/{color}][#1e2a3a]{'\u2591' * empty}[/#1e2a3a]"
-        label_part = f"[bold #ccddee]{escape(self.label)}[/bold #ccddee]  " if self.label else ""
+        bar = f"[{color}]{'\u2588' * filled}[/{color}][$surface]{'\u2591' * empty}[/$surface]"
+        label_part = f"[bold $text]{escape(self.label)}[/bold $text]  " if self.label else ""
         text = f"{label_part}{bar}  [bold {color}]{self.value:.3f}[/bold {color}]"
         yield Static(text)

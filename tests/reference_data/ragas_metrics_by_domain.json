@@ -1,0 +1,71 @@
+{
+  "generated_at": "2026-02-28T05:41:20.496410",
+  "n_questions": 30,
+  "ragas_judge": "llama-3.1-8b-instant (Groq)",
+  "methods": {
+    "bioscore": {
+      "faithfulness": 0.176,
+      "answer_relevancy": 0.9148,
+      "context_precision": 0.0729,
+      "keyword_overlap": 0.2952,
+      "answer_length": 1499.3,
+      "has_statistics": 1.0,
+      "avg_source_year": 2023.2467,
+      "retrieve_ms": 370.4207,
+      "rerank_ms": 18.1453,
+      "generate_ms": 11949.1467,
+      "total_ms": 12401.2467,
+      "temporal_faithfulness": 0.1809,
+      "temporal_answer_relevancy": 0.8586,
+      "temporal_keyword_overlap": 0.2541
+    },
+    "etvd": {
+      "faithfulness": 0.2128,
+      "answer_relevancy": 0.8742,
+      "context_precision": 0.0917,
+      "keyword_overlap": 0.2885,
+      "answer_length": 1544.4333,
+      "has_statistics": 1.0,
+      "avg_source_year": 2022.66,
+      "retrieve_ms": 294.431,
+      "rerank_ms": 4.6897,
+      "generate_ms": 12143.1727,
+      "total_ms": 12526.1833,
+      "temporal_faithfulness": 0.1615,
+      "temporal_answer_relevancy": 0.6762,
+      "temporal_keyword_overlap": 0.2242
+    },
+    "no_decay": {
+      "faithfulness": 0.1503,
+      "answer_relevancy": 0.8871,
+      "context_precision": 0.0455,
+      "keyword_overlap": 0.2781,
+      "answer_length": 1517.6667,
+      "has_statistics": 1.0,
+      "avg_source_year": 2022.66,
+      "retrieve_ms": 469.561,
+      "rerank_ms": 1.257,
+      "generate_ms": 12301.4573,
+      "total_ms": 12823.6833,
+      "temporal_faithfulness": 0.0521,
+      "temporal_answer_relevancy": 0.8389,
+      "temporal_keyword_overlap": 0.2351
+    },
+    "sigmoid": {
+      "faithfulness": 0.1648,
+      "answer_relevancy": 0.9368,
+      "context_precision": 0.0227,
+      "keyword_overlap": 0.2939,
+      "answer_length": 1517.7667,
+      "has_statistics": 1.0,
+      "avg_source_year": 2022.6,
+      "retrieve_ms": 416.2053,
+      "rerank_ms": 1.362,
+      "generate_ms": 12039.0433,
+      "total_ms": 12545.25,
+      "temporal_faithfulness": 0.1611,
+      "temporal_answer_relevancy": 0.9237,
+      "temporal_keyword_overlap": 0.2538
+    }
+  }
+}

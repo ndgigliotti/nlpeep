@@ -7,8 +7,8 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Input, ListView, ListItem, Static
 
-from rag_viewer.data import RecordStore
-from rag_viewer.schema import SchemaMapping
+from nlpeep.data import RecordStore
+from nlpeep.schema import SchemaMapping
 
 
 class RecordNavigator(Widget):
@@ -67,7 +67,7 @@ class RecordNavigator(Widget):
             label = record.label(label_path)
             item = ListItem(
                 Static(
-                    f"[dim #00e5ff]{idx:>3}[/dim #00e5ff]  [#ccddee]{label}[/#ccddee]",
+                    f"[dim $accent]{idx:>3}[/dim $accent]  [$text]{label}[/$text]",
                     classes="nav-item-label",
                 ),
             )

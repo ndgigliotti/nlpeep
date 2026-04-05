@@ -9,9 +9,9 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Static, TabbedContent, TabPane
 
-from rag_viewer.data import Record
-from rag_viewer.schema import FieldRole, SchemaMapping
-from rag_viewer.widgets.field_panel import FieldPanel
+from nlpeep.data import Record
+from nlpeep.schema import FieldRole, SchemaMapping
+from nlpeep.widgets.field_panel import FieldPanel
 
 
 class RecordContent(Widget):
