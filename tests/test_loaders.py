@@ -113,14 +113,15 @@ class TestCsvLoader:
         finally:
             path.unlink()
 
-    def test_coerces_embedded_json(self) -> None:
+    def test_embedded_json_stays_as_string(self) -> None:
+        """Polars leaves embedded JSON as strings; the renderer handles them."""
         content = 'name,tags\nfoo,"[""a"",""b""]"\nbar,"[""c""]"\n'
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write(content)
             path = Path(f.name)
         try:
             store = RecordStore.load(path)
-            assert store[0].data["tags"] == ["a", "b"]
+            assert isinstance(store[0].data["tags"], str)
         finally:
             path.unlink()
 

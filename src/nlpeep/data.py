@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import csv
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+import polars as pl
 
 
 @dataclass
@@ -117,26 +118,14 @@ class RecordStore:
 
     @classmethod
     def _load_csv(cls, path: Path, delimiter: str = ",") -> RecordStore:
-        records: list[Record] = []
-        with open(path, encoding="utf-8", newline="") as f:
-            reader = csv.DictReader(f, delimiter=delimiter)
-            for i, row in enumerate(reader):
-                records.append(Record(index=i, data=_coerce_csv_row(dict(row))))
+        rows = pl.read_csv(path, separator=delimiter).to_dicts()
+        records = [Record(index=i, data=row) for i, row in enumerate(rows)]
         return cls(records=records, skipped=0, path=path)
 
     @classmethod
     def _load_parquet(cls, path: Path) -> RecordStore:
-        try:
-            import polars as pl
-        except ImportError:
-            raise SystemExit(
-                "Parquet support requires polars. Install it with: uv pip install polars"
-            )
-        df = pl.read_parquet(path)
-        records = [
-            Record(index=i, data=row)
-            for i, row in enumerate(df.to_dicts())
-        ]
+        rows = pl.read_parquet(path).to_dicts()
+        records = [Record(index=i, data=row) for i, row in enumerate(rows)]
         return cls(records=records, skipped=0, path=path)
 
     def __len__(self) -> int:
@@ -172,36 +161,6 @@ class RecordStore:
     def sample(self, n: int = 20) -> list[Record]:
         """Return up to n records for schema auto-detection."""
         return self.records[:n]
-
-
-def _coerce_csv_row(row: dict[str, Any]) -> dict[str, Any]:
-    """Best-effort type coercion for CSV string values."""
-    out: dict[str, Any] = {}
-    for k, v in row.items():
-        if not isinstance(v, str):
-            out[k] = v
-            continue
-        # Try int
-        try:
-            out[k] = int(v)
-            continue
-        except ValueError:
-            pass
-        # Try float
-        try:
-            out[k] = float(v)
-            continue
-        except ValueError:
-            pass
-        # Try embedded JSON (lists, dicts)
-        if v.startswith(("{", "[")):
-            try:
-                out[k] = json.loads(v)
-                continue
-            except (json.JSONDecodeError, ValueError):
-                pass
-        out[k] = v
-    return out
 
 
 def _truncate(s: str, length: int) -> str:
