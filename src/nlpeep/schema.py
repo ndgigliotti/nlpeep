@@ -56,13 +56,19 @@ class MetricScale(str, Enum):
     UNKNOWN = "unknown"   # scale not determined
 
 
-# Split camelCase, snake_case, kebab-case, dot.separated into tokens.
-_CAMEL_RE = re.compile(r"([a-z0-9])([A-Z])")
+# Split camelCase/PascalCase boundaries for tokenization.
+_CAMEL_LOWER_UPPER = re.compile(r"([a-z0-9])([A-Z])")    # "camelCase" -> "camel_Case"
+_CAMEL_UPPER_RUN = re.compile(r"([A-Z]+)([A-Z][a-z])")   # "HTMLParser" -> "HTML_Parser"
 
 
 def _tokenize_name(name: str) -> list[str]:
-    """Split a field name into lowercase tokens."""
-    name = _CAMEL_RE.sub(r"\1_\2", name)
+    """Split a field name into lowercase tokens.
+
+    Handles camelCase, PascalCase, snake_case (including multiple
+    underscores), kebab-case, dot.separated, and spaces.
+    """
+    name = _CAMEL_LOWER_UPPER.sub(r"\1_\2", name)
+    name = _CAMEL_UPPER_RUN.sub(r"\1_\2", name)
     return [t.lower() for t in re.split(r"[_\-.\s]+", name) if t]
 
 
