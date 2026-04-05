@@ -78,15 +78,15 @@ def _tokenize_name(name: str) -> list[str]:
 def _depluralize(token: str) -> str:
     """Cheap singular reduction -- covers regular English plurals.
 
-    Intentionally conservative: leaves Latin/Greek endings (-us, -is,
-    -as) alone to avoid mangling words like status, bias, analysis.
+    Intentionally conservative: leaves Latin/Greek endings (-us, -is)
+    alone to avoid mangling words like status and analysis.
     """
     if len(token) <= 2:
         return token
     if token.endswith("ies") and len(token) > 4:
         return token[:-3] + "y"       # "entities" -> "entity"
-    if token.endswith("sses") or token.endswith("xes") or token.endswith("zes"):
-        return token[:-2]             # "classes" -> "class", "boxes" -> "box"
+    if token.endswith(("sses", "xes", "zes", "ches", "shes")):
+        return token[:-2]             # "classes" -> "class", "searches" -> "search"
     # Skip words that are likely singular despite ending in -s.
     if token.endswith(("us", "is", "ss")):
         return token                  # "status", "analysis", "miss"

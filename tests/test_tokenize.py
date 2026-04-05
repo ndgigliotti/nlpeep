@@ -25,9 +25,11 @@ class TestDepluralize:
         # -ies -> -y
         ("entities", "entity"),
         ("categories", "category"),
-        # -sses/-xes/-zes -> strip -es
+        # -sses/-xes/-zes/-ches/-shes -> strip -es
         ("classes", "class"),
         ("indexes", "index"),
+        ("searches", "search"),
+        ("batches", "batch"),
         # -se + s should strip -s, not -es
         ("responses", "response"),
         ("phrases", "phrase"),
