@@ -32,6 +32,21 @@ class FieldRole(str, Enum):
         }[self]
 
 
+class FieldArchetype(str, Enum):
+    """Data-property-based classification of a field, independent of its role."""
+    IDENTIFIER = "identifier"
+    FREE_TEXT = "free_text"
+    CATEGORY = "category"
+    SCORE = "score"
+    SCORE_DICT = "score_dict"
+    RANKED_LIST = "ranked_list"
+    SEQUENCE = "sequence"
+    CONVERSATION = "conversation"
+    STEPS = "steps"
+    FLAT_RECORD = "flat_record"
+    NESTED_BLOB = "nested_blob"
+
+
 # Patterns for name-based auto-detection, ordered by specificity
 _ROLE_PATTERNS: list[tuple[FieldRole, re.Pattern[str]]] = [
     (FieldRole.ID, re.compile(r"^(id|_id|record_id|example_id|idx|uuid)$", re.I)),
@@ -44,6 +59,9 @@ _ROLE_PATTERNS: list[tuple[FieldRole, re.Pattern[str]]] = [
     (FieldRole.METADATA, re.compile(r"^(metadata|meta|info|config|params|settings|extras)$", re.I)),
 ]
 
+# Maximum recursion depth for nested field detection
+_MAX_NEST_DEPTH = 4
+
 
 @dataclass
 class FieldMapping:
@@ -52,6 +70,7 @@ class FieldMapping:
     display_name: str = ""
     sub_fields: dict[str, str] = field(default_factory=dict)
     confidence: float = 0.0
+    archetype: FieldArchetype | None = None
 
     def __post_init__(self) -> None:
         if not self.display_name:
@@ -98,12 +117,32 @@ class SchemaMapping:
 
     def unmapped_fields(self, record_data: dict[str, Any]) -> dict[str, Any]:
         mapped_paths = {m.json_path for m in self.mappings if m.role != FieldRole.UNMAPPED}
-        result = {}
+        # Build set of top-level keys that are fully or partially consumed
+        consumed_top_keys: set[str] = set()
+        for p in mapped_paths:
+            consumed_top_keys.add(p.split(".")[0])
+
+        result: dict[str, Any] = {}
         for key, val in record_data.items():
-            # Check if this key is a prefix of (or equal to) any mapped path
-            if key not in mapped_paths:
+            if key in mapped_paths:
+                # Exact top-level match -- skip entirely
+                continue
+            if key in consumed_top_keys:
+                # Some nested path under this key is mapped.
+                # Include only the parts that are not mapped.
+                remaining = _unmapped_subtree(key, val, mapped_paths)
+                if remaining is not None:
+                    result[key] = remaining
+            else:
                 result[key] = val
         return result
+
+    def archetype_for_path(self, path: str) -> FieldArchetype | None:
+        """Return the archetype for a given json_path, or None."""
+        for m in self.mappings:
+            if m.json_path == path:
+                return m.archetype
+        return None
 
     def label_path(self) -> str | None:
         for role in (FieldRole.QUERY, FieldRole.ID):
@@ -167,55 +206,63 @@ class SchemaMapping:
         if not records:
             return cls()
 
-        # Collect all top-level keys across sample records
-        key_counts: dict[str, int] = {}
-        key_samples: dict[str, list[Any]] = {}
+        # Collect all fields (including nested) across sample records.
+        # Each entry maps a dot-path to its occurrence count and sample values.
+        path_counts: dict[str, int] = {}
+        path_samples: dict[str, list[Any]] = {}
         total = len(records)
 
         for record in records:
             data = record.data if hasattr(record, "data") else record
             if not isinstance(data, dict):
                 continue
-            for key, val in data.items():
-                key_counts[key] = key_counts.get(key, 0) + 1
-                if key not in key_samples:
-                    key_samples[key] = []
-                if len(key_samples[key]) < 5:
-                    key_samples[key].append(val)
+            flat = _flatten_record(data)
+            for dot_path, val in flat.items():
+                path_counts[dot_path] = path_counts.get(dot_path, 0) + 1
+                if dot_path not in path_samples:
+                    path_samples[dot_path] = []
+                if len(path_samples[dot_path]) < 5:
+                    path_samples[dot_path].append(val)
 
         mappings: list[FieldMapping] = []
         claimed_roles: set[FieldRole] = set()
 
-        # Pass 1: Name-based matching
-        for key in key_counts:
+        # Pass 1: Name-based matching on leaf names and full paths.
+        # Sort paths so shallower ones come first (fewer dots = shallower).
+        sorted_paths = sorted(path_counts, key=lambda p: p.count("."))
+        for dot_path in sorted_paths:
+            leaf = dot_path.rsplit(".", 1)[-1]
             for role, pattern in _ROLE_PATTERNS:
                 if role in claimed_roles:
                     continue
-                if pattern.match(key):
-                    presence = key_counts[key] / total
+                # Match on the leaf field name first (primary signal)
+                if pattern.match(leaf):
+                    presence = path_counts[dot_path] / total
                     confidence = 0.9 * presence
                     mapping = FieldMapping(
-                        json_path=key,
+                        json_path=dot_path,
                         role=role,
                         confidence=confidence,
                     )
-                    # For documents role, try to detect sub-fields
                     if role == FieldRole.DOCUMENTS:
-                        mapping.sub_fields = _detect_doc_subfields(key_samples.get(key, []))
+                        mapping.sub_fields = _detect_doc_subfields(
+                            path_samples.get(dot_path, [])
+                        )
                     mappings.append(mapping)
                     claimed_roles.add(role)
                     break
 
         # Pass 2: Structural analysis for unclaimed roles
-        for key, samples in key_samples.items():
-            if any(m.json_path == key for m in mappings):
+        for dot_path in sorted_paths:
+            if any(m.json_path == dot_path for m in mappings):
                 continue
-
-            role = _structural_role(key, samples)
+            samples = path_samples.get(dot_path, [])
+            leaf = dot_path.rsplit(".", 1)[-1]
+            role = _structural_role(leaf, samples)
             if role != FieldRole.UNMAPPED and role not in claimed_roles:
-                presence = key_counts[key] / total
+                presence = path_counts[dot_path] / total
                 mapping = FieldMapping(
-                    json_path=key,
+                    json_path=dot_path,
                     role=role,
                     confidence=0.5 * presence,
                 )
@@ -224,23 +271,191 @@ class SchemaMapping:
                 mappings.append(mapping)
                 claimed_roles.add(role)
 
-        # Pass 3: Scan remaining unmapped keys for score-like floats
-        # These get assigned to METRICS (allowing multiple fields per role)
-        mapped_keys = {m.json_path for m in mappings}
-        for key, samples in key_samples.items():
-            if key in mapped_keys:
+        # Pass 3: Scan remaining unmapped paths for score-like floats.
+        # These get assigned to METRICS (allowing multiple fields per role).
+        mapped_paths = {m.json_path for m in mappings}
+        for dot_path in sorted_paths:
+            if dot_path in mapped_paths:
                 continue
-            if _is_score_like_field(key, samples):
-                presence = key_counts[key] / total
+            samples = path_samples.get(dot_path, [])
+            leaf = dot_path.rsplit(".", 1)[-1]
+            if _is_score_like_field(leaf, samples):
+                presence = path_counts[dot_path] / total
                 mappings.append(FieldMapping(
-                    json_path=key,
+                    json_path=dot_path,
                     role=FieldRole.METRICS,
                     confidence=0.6 * presence,
                 ))
-                # Note: we do NOT add METRICS to claimed_roles here,
-                # because multiple fields can share this role.
+
+        # Pass 4: Classify archetypes for all discovered paths.
+        # This provides rendering hints even for unmapped fields.
+        mapped_paths = {m.json_path for m in mappings}
+        for m in mappings:
+            m.archetype = _classify_archetype(
+                m.json_path, path_samples.get(m.json_path, []), total
+            )
+        # Also assign archetypes to remaining top-level fields that
+        # were not mapped (they will render via archetype in Details tab).
+        for dot_path in sorted_paths:
+            if dot_path in mapped_paths:
+                continue
+            arch = _classify_archetype(
+                dot_path, path_samples.get(dot_path, []), total
+            )
+            # Only store archetype info for leaf fields that are not
+            # parents of already-mapped deeper paths, to avoid
+            # duplicating container dicts.
+            mappings.append(FieldMapping(
+                json_path=dot_path,
+                role=FieldRole.UNMAPPED,
+                confidence=0.0,
+                archetype=arch,
+            ))
 
         return cls(mappings=mappings)
+
+
+def _flatten_record(data: dict[str, Any], prefix: str = "", depth: int = 0) -> dict[str, Any]:
+    """Flatten nested dicts into dot-paths, stopping at lists and the depth cap.
+
+    Returns a dict of {dot_path: leaf_value} pairs. Dicts are recursed into
+    but lists are kept as-is (they are values, not structure).
+    """
+    result: dict[str, Any] = {}
+    for key, val in data.items():
+        dot_path = f"{prefix}.{key}" if prefix else key
+        if isinstance(val, dict) and depth < _MAX_NEST_DEPTH:
+            # Recurse into nested dicts
+            result.update(_flatten_record(val, dot_path, depth + 1))
+        else:
+            # Leaf value (or depth cap reached, or list)
+            result[dot_path] = val
+    return result
+
+
+def _classify_archetype(path: str, samples: list[Any], total_records: int) -> FieldArchetype | None:
+    """Classify a field based on its sampled data properties."""
+    if not samples:
+        return None
+
+    # -- identifier: unique per record, short string or int --
+    if all(isinstance(s, (str, int)) for s in samples):
+        if all(isinstance(s, int) for s in samples):
+            unique = len(set(samples))
+            if unique == len(samples):
+                return FieldArchetype.IDENTIFIER
+        elif all(isinstance(s, str) for s in samples):
+            unique = len(set(samples))
+            avg_len = sum(len(s) for s in samples) / len(samples) if samples else 0
+            if unique == len(samples) and avg_len < 100:
+                return FieldArchetype.IDENTIFIER
+
+    # -- score: float in bounded range [0, 1] --
+    numeric = [s for s in samples if isinstance(s, (int, float)) and not isinstance(s, bool)]
+    if numeric and len(numeric) == len(samples):
+        if all(0 <= v <= 1 for v in numeric) and any(isinstance(v, float) for v in numeric):
+            return FieldArchetype.SCORE
+
+    # -- score_dict: dict where all values are numeric --
+    if all(isinstance(s, dict) for s in samples):
+        if all(
+            s and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in s.values())
+            for s in samples
+        ):
+            return FieldArchetype.SCORE_DICT
+
+    # -- conversation: list of dicts with role + content pattern --
+    if all(isinstance(s, list) for s in samples):
+        flat_items = [item for s in samples for item in s if isinstance(item, dict)]
+        if flat_items:
+            if all(
+                "role" in item and "content" in item
+                for item in flat_items[:10]
+            ):
+                return FieldArchetype.CONVERSATION
+
+    # -- ranked_list: list of dicts containing a text field + a numeric field --
+    if all(isinstance(s, list) for s in samples):
+        flat_items = [item for s in samples for item in s if isinstance(item, dict)]
+        if flat_items and _looks_like_docs(flat_items):
+            return FieldArchetype.RANKED_LIST
+
+    # -- steps: list of dicts with action/tool-like keys --
+    if all(isinstance(s, list) for s in samples):
+        flat_items = [item for s in samples for item in s if isinstance(item, dict)]
+        if flat_items and _looks_like_trace(flat_items):
+            return FieldArchetype.STEPS
+
+    # -- sequence: list of short strings (tokens) --
+    if all(isinstance(s, list) for s in samples):
+        flat_items = [item for s in samples for item in s]
+        if flat_items and all(isinstance(item, str) for item in flat_items):
+            avg_len = sum(len(item) for item in flat_items) / len(flat_items)
+            if avg_len < 30:
+                return FieldArchetype.SEQUENCE
+
+    # -- String-based archetypes: free_text vs category --
+    str_samples = [s for s in samples if isinstance(s, str)]
+    if str_samples and len(str_samples) == len(samples):
+        avg_len = sum(len(s) for s in str_samples) / len(str_samples)
+        lengths = [len(s) for s in str_samples]
+        length_variance = (
+            sum((l - avg_len) ** 2 for l in lengths) / len(lengths)
+            if len(lengths) > 1
+            else 0.0
+        )
+        unique = len(set(str_samples))
+        cardinality_ratio = unique / len(str_samples) if str_samples else 1.0
+
+        if avg_len > 50:
+            return FieldArchetype.FREE_TEXT
+        # Category: low cardinality, short strings, low length variance
+        if cardinality_ratio < 0.8 and avg_len < 50 and length_variance < 200:
+            return FieldArchetype.CATEGORY
+        # Small sample with short strings -- use length variance as tiebreaker
+        if avg_len < 30 and length_variance < 50:
+            return FieldArchetype.CATEGORY
+        if avg_len > 20:
+            return FieldArchetype.FREE_TEXT
+
+    # -- flat_record: dict of scalar values --
+    if all(isinstance(s, dict) for s in samples):
+        if all(
+            all(isinstance(v, (str, int, float, bool, type(None))) for v in s.values())
+            for s in samples
+            if s
+        ):
+            return FieldArchetype.FLAT_RECORD
+
+    # -- nested_blob: anything else complex --
+    if any(isinstance(s, (dict, list)) for s in samples):
+        return FieldArchetype.NESTED_BLOB
+
+    return None
+
+
+def _unmapped_subtree(prefix: str, val: Any, mapped_paths: set[str]) -> Any:
+    """Return the portion of *val* whose paths are not in *mapped_paths*.
+
+    For a dict, filters out keys whose dot-path is mapped, recursing one level.
+    Returns None if everything is consumed.
+    """
+    if not isinstance(val, dict):
+        return val
+    remaining: dict[str, Any] = {}
+    for k, v in val.items():
+        full = f"{prefix}.{k}"
+        if full in mapped_paths:
+            continue
+        # Check if any mapped path is beneath this key
+        child_mapped = any(p.startswith(full + ".") for p in mapped_paths)
+        if child_mapped:
+            sub = _unmapped_subtree(full, v, mapped_paths)
+            if sub is not None:
+                remaining[k] = sub
+        else:
+            remaining[k] = v
+    return remaining if remaining else None
 
 
 def _resolve_path(data: Any, path: str) -> Any:

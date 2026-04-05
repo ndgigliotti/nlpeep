@@ -8,7 +8,7 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 from nlpeep.renderers import classify_value, render_value
-from nlpeep.schema import FieldRole
+from nlpeep.schema import FieldArchetype, FieldRole
 
 
 class FieldPanel(Widget):
@@ -33,6 +33,7 @@ class FieldPanel(Widget):
         role: FieldRole = FieldRole.UNMAPPED,
         sub_fields: dict[str, str] | None = None,
         show_label: bool = True,
+        archetype: FieldArchetype | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
@@ -41,10 +42,11 @@ class FieldPanel(Widget):
         self.role = role
         self.sub_fields = sub_fields or {}
         self.show_label = show_label
+        self.archetype = archetype
 
     def compose(self) -> ComposeResult:
         try:
-            vtype = classify_value(self.value, self.field_name, self.role)
+            vtype = classify_value(self.value, self.field_name, self.role, self.archetype)
             widget = render_value(self.value, vtype, self.field_name, self.sub_fields)
         except Exception:
             import json

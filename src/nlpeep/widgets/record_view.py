@@ -98,7 +98,12 @@ class RecordContent(Widget):
             unmapped = mapping.unmapped_fields(record.data)
             if unmapped:
                 panels = [
-                    FieldPanel(field_name=k, value=v, role=FieldRole.UNMAPPED)
+                    FieldPanel(
+                        field_name=k,
+                        value=v,
+                        role=FieldRole.UNMAPPED,
+                        archetype=mapping.archetype_for_path(k),
+                    )
                     for k, v in unmapped.items()
                 ]
                 yield TabPane("Details", Vertical(*panels))

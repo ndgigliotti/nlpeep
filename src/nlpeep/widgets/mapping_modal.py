@@ -44,7 +44,7 @@ class MappingModal(ModalScreen[SchemaMapping | None]):
         text-style: bold dim;
     }
     MappingModal .header-field {
-        width: 30;
+        width: 36;
     }
     MappingModal .header-type {
         width: 14;
@@ -57,7 +57,7 @@ class MappingModal(ModalScreen[SchemaMapping | None]):
         padding: 0 1;
     }
     MappingModal .field-name {
-        width: 30;
+        width: 36;
         padding: 1 1 0 0;
     }
     MappingModal .field-type {
@@ -134,25 +134,36 @@ class MappingModal(ModalScreen[SchemaMapping | None]):
                         "Role",
                         classes="header-label header-role",
                     )
-                for field_name, types in field_summary.items():
+                # Sort fields so shallower paths appear first, and
+                # nested paths are visually grouped under their parent.
+                sorted_fields = sorted(
+                    field_summary.items(),
+                    key=lambda item: (item[0].count("."), item[0]),
+                )
+                for field_name, types in sorted_fields:
                     type_str = ", ".join(sorted(types))
                     current_role = path_to_role.get(field_name, FieldRole.UNMAPPED.value)
+                    # Use a sanitized ID: dots are not valid in CSS ids
+                    safe_id = field_name.replace(".", "__")
                     select = Select(
                         _ROLE_OPTIONS,
                         value=current_role,
                         allow_blank=False,
                         classes="role-select",
-                        id=f"select-{field_name}",
+                        id=f"select-{safe_id}",
                     )
                     self._selects[field_name] = select
                     # Confidence tag for auto-detected mappings
                     conf = self._confidence.get(field_name, 0.0)
                     conf_text = f"(auto {conf:.2f})" if conf > 0 and conf < 1.0 else ""
                     # Group hint label (updated reactively)
-                    group_label = Label("", classes="group-hint", id=f"group-{field_name}")
+                    group_label = Label("", classes="group-hint", id=f"group-{safe_id}")
                     self._group_labels[field_name] = group_label
+                    # Indent nested paths for visual grouping
+                    depth = field_name.count(".")
+                    display_name = ("  " * depth) + field_name
                     with Horizontal(classes="field-row"):
-                        yield Label(field_name, classes="field-name")
+                        yield Label(display_name, classes="field-name")
                         yield Label(type_str, classes="field-type")
                         yield select
                         yield Label(conf_text, classes="confidence-tag")

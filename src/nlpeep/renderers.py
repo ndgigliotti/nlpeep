@@ -10,7 +10,7 @@ from rich.text import Text
 from textual.widget import Widget
 from textual.widgets import DataTable, Markdown, Static, Tree, Collapsible
 
-from nlpeep.schema import FieldRole
+from nlpeep.schema import FieldArchetype, FieldRole
 
 
 class ValueType(Enum):
@@ -37,8 +37,29 @@ _SCORE_NAMES = {
 }
 
 
-def classify_value(value: Any, field_name: str = "", role: FieldRole = FieldRole.UNMAPPED) -> ValueType:
-    """Two-pass classification: role-based first, then structural."""
+# Mapping from archetype to the best ValueType for rendering unmapped fields
+_ARCHETYPE_TO_VALUE_TYPE: dict[FieldArchetype, ValueType] = {
+    FieldArchetype.IDENTIFIER: ValueType.SHORT_TEXT,
+    FieldArchetype.FREE_TEXT: ValueType.LONG_TEXT,
+    FieldArchetype.CATEGORY: ValueType.SHORT_TEXT,
+    FieldArchetype.SCORE: ValueType.SCORE,
+    FieldArchetype.SCORE_DICT: ValueType.METRIC_DICT,
+    FieldArchetype.RANKED_LIST: ValueType.DOC_LIST,
+    FieldArchetype.SEQUENCE: ValueType.SIMPLE_LIST,
+    FieldArchetype.CONVERSATION: ValueType.CHAT_MESSAGES,
+    FieldArchetype.STEPS: ValueType.STEP_LIST,
+    FieldArchetype.FLAT_RECORD: ValueType.FLAT_DICT,
+    FieldArchetype.NESTED_BLOB: ValueType.NESTED_DICT,
+}
+
+
+def classify_value(
+    value: Any,
+    field_name: str = "",
+    role: FieldRole = FieldRole.UNMAPPED,
+    archetype: FieldArchetype | None = None,
+) -> ValueType:
+    """Three-pass classification: role-based first, archetype second, then structural."""
     # Pass 1: Role-based
     if role == FieldRole.QUERY:
         if isinstance(value, str):
@@ -65,7 +86,20 @@ def classify_value(value: Any, field_name: str = "", role: FieldRole = FieldRole
                     return ValueType.CHAT_MESSAGES
                 return ValueType.STEP_LIST
 
-    # Pass 2: Structural
+    # Pass 2: Archetype-based (only when no role dictated a type above)
+    if archetype is not None and role == FieldRole.UNMAPPED:
+        archetype_type = _ARCHETYPE_TO_VALUE_TYPE.get(archetype)
+        if archetype_type is not None:
+            # For archetypes that map to list-based types, verify the value is actually a list
+            if archetype_type in (
+                ValueType.DOC_LIST, ValueType.CHAT_MESSAGES,
+                ValueType.STEP_LIST, ValueType.SIMPLE_LIST,
+            ) and not isinstance(value, list):
+                pass  # fall through to structural
+            else:
+                return archetype_type
+
+    # Pass 3: Structural
     if isinstance(value, str):
         if len(value) < 200 and "\n" not in value:
             return ValueType.SHORT_TEXT
