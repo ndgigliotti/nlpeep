@@ -53,7 +53,7 @@ _ROLE_PATTERNS: list[tuple[FieldRole, re.Pattern[str]]] = [
     (FieldRole.QUERY, re.compile(r"^(query|question|input|prompt|user_input|q|user_query|search_query)$", re.I)),
     (FieldRole.RESPONSE, re.compile(r"^(response|answer|output|result|generation|completion|predicted|llm_response|assistant|reply)$", re.I)),
     (FieldRole.GROUND_TRUTH, re.compile(r"^(ground_truth|expected|gold|reference|target|label|correct_answer)$", re.I)),
-    (FieldRole.DOCUMENTS, re.compile(r"^(documents|docs|retrieved_documents|contexts|passages|chunks|results|retrieved|retrieved_passages|context|sources|retrieved_chunks)$", re.I)),
+    (FieldRole.DOCUMENTS, re.compile(r"^(documents|docs|retrieved_documents|contexts|passages|chunks|retrieved|retrieved_passages|sources|retrieved_chunks)$", re.I)),
     (FieldRole.METRICS, re.compile(r"^(metrics|scores|evaluation|eval_results|eval|evaluations)$", re.I)),
     (FieldRole.TRACE, re.compile(r"^(trace|steps|tool_calls|llm_calls|messages|chain|actions|trajectory|history|tool_use)$", re.I)),
     (FieldRole.METADATA, re.compile(r"^(metadata|meta|info|config|params|settings|extras)$", re.I)),
@@ -210,19 +210,22 @@ class SchemaMapping:
         # Each entry maps a dot-path to its occurrence count and sample values.
         path_counts: dict[str, int] = {}
         path_samples: dict[str, list[Any]] = {}
+        path_keys: dict[str, str] = {}  # dot_path -> original key name
         total = len(records)
 
         for record in records:
             data = record.data if hasattr(record, "data") else record
             if not isinstance(data, dict):
                 continue
-            flat = _flatten_record(data)
+            flat, orig_keys = _flatten_record(data)
             for dot_path, val in flat.items():
                 path_counts[dot_path] = path_counts.get(dot_path, 0) + 1
                 if dot_path not in path_samples:
                     path_samples[dot_path] = []
                 if len(path_samples[dot_path]) < 5:
                     path_samples[dot_path].append(val)
+                if dot_path not in path_keys:
+                    path_keys[dot_path] = orig_keys.get(dot_path, dot_path)
 
         mappings: list[FieldMapping] = []
         claimed_roles: set[FieldRole] = set()
@@ -231,26 +234,42 @@ class SchemaMapping:
         # Sort paths so shallower ones come first (fewer dots = shallower).
         sorted_paths = sorted(path_counts, key=lambda p: p.count("."))
         for dot_path in sorted_paths:
-            leaf = dot_path.rsplit(".", 1)[-1]
+            # Use the original key name (not the flattened path leaf) for
+            # matching.  For Phoenix-style data where keys contain dots
+            # (e.g. "input.value"), this lets us match against "input".
+            original_key = path_keys.get(dot_path, dot_path.rsplit(".", 1)[-1])
+            candidates = [original_key]
+            if "." in original_key:
+                candidates.extend(original_key.split("."))
+
+            samples = path_samples.get(dot_path, [])
+
             for role, pattern in _ROLE_PATTERNS:
                 if role in claimed_roles:
                     continue
-                # Match on the leaf field name first (primary signal)
-                if pattern.match(leaf):
-                    presence = path_counts[dot_path] / total
-                    confidence = 0.9 * presence
-                    mapping = FieldMapping(
-                        json_path=dot_path,
-                        role=role,
-                        confidence=confidence,
-                    )
-                    if role == FieldRole.DOCUMENTS:
-                        mapping.sub_fields = _detect_doc_subfields(
-                            path_samples.get(dot_path, [])
-                        )
-                    mappings.append(mapping)
-                    claimed_roles.add(role)
-                    break
+                if not any(pattern.match(c) for c in candidates):
+                    continue
+                # Type guard: text roles must have string samples,
+                # not ints (avoids matching "prompt" in token counts).
+                if role in (FieldRole.QUERY, FieldRole.RESPONSE, FieldRole.GROUND_TRUTH):
+                    if samples and not any(isinstance(s, str) for s in samples):
+                        continue
+                # Presence guard: IDs should appear in most records.
+                if role == FieldRole.ID and path_counts[dot_path] / total < 0.5:
+                    continue
+
+                presence = path_counts[dot_path] / total
+                confidence = 0.9 * presence
+                mapping = FieldMapping(
+                    json_path=dot_path,
+                    role=role,
+                    confidence=confidence,
+                )
+                if role == FieldRole.DOCUMENTS:
+                    mapping.sub_fields = _detect_doc_subfields(samples)
+                mappings.append(mapping)
+                claimed_roles.add(role)
+                break
 
         # Pass 2: Structural analysis for unclaimed roles
         for dot_path in sorted_paths:
@@ -315,22 +334,28 @@ class SchemaMapping:
         return cls(mappings=mappings)
 
 
-def _flatten_record(data: dict[str, Any], prefix: str = "", depth: int = 0) -> dict[str, Any]:
+def _flatten_record(
+    data: dict[str, Any], prefix: str = "", depth: int = 0,
+) -> tuple[dict[str, Any], dict[str, str]]:
     """Flatten nested dicts into dot-paths, stopping at lists and the depth cap.
 
-    Returns a dict of {dot_path: leaf_value} pairs. Dicts are recursed into
-    but lists are kept as-is (they are values, not structure).
+    Returns two dicts:
+      - {dot_path: leaf_value}
+      - {dot_path: original_key} so callers can match against the real
+        key name (important for formats with dots in key names).
     """
-    result: dict[str, Any] = {}
+    paths: dict[str, Any] = {}
+    keys: dict[str, str] = {}
     for key, val in data.items():
         dot_path = f"{prefix}.{key}" if prefix else key
         if isinstance(val, dict) and depth < _MAX_NEST_DEPTH:
-            # Recurse into nested dicts
-            result.update(_flatten_record(val, dot_path, depth + 1))
+            sub_paths, sub_keys = _flatten_record(val, dot_path, depth + 1)
+            paths.update(sub_paths)
+            keys.update(sub_keys)
         else:
-            # Leaf value (or depth cap reached, or list)
-            result[dot_path] = val
-    return result
+            paths[dot_path] = val
+            keys[dot_path] = key
+    return paths, keys
 
 
 def _classify_archetype(path: str, samples: list[Any], total_records: int) -> FieldArchetype | None:
@@ -459,15 +484,33 @@ def _unmapped_subtree(prefix: str, val: Any, mapped_paths: set[str]) -> Any:
 
 
 def _resolve_path(data: Any, path: str) -> Any:
+    """Resolve a dot-path against nested data, handling dotted key names.
+
+    Uses greedy matching: when a single segment doesn't match a dict key,
+    tries progressively longer dot-joined segments.  This handles formats
+    like Phoenix OpenInference where keys contain literal dots
+    (e.g. ``attributes["input.value"]``).
+    """
+    parts = path.split(".")
     current = data
-    for part in path.split("."):
+    i = 0
+    while i < len(parts):
         if isinstance(current, dict):
-            if part not in current:
+            # Try progressively longer key segments (greedy)
+            matched = False
+            for j in range(len(parts), i, -1):
+                candidate = ".".join(parts[i:j])
+                if candidate in current:
+                    current = current[candidate]
+                    i = j
+                    matched = True
+                    break
+            if not matched:
                 return None
-            current = current[part]
         elif isinstance(current, list):
             try:
-                current = current[int(part)]
+                current = current[int(parts[i])]
+                i += 1
             except (ValueError, IndexError):
                 return None
         else:

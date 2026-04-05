@@ -12,16 +12,30 @@ class Record:
     data: dict[str, Any]
 
     def get_path(self, path: str) -> Any:
-        """Resolve a dot-notation path against this record's data."""
+        """Resolve a dot-notation path against this record's data.
+
+        Uses greedy matching so that dotted key names (e.g. Phoenix
+        OpenInference ``"input.value"``) are resolved correctly.
+        """
+        parts = path.split(".")
         current: Any = self.data
-        for part in path.split("."):
+        i = 0
+        while i < len(parts):
             if isinstance(current, dict):
-                if part not in current:
+                matched = False
+                for j in range(len(parts), i, -1):
+                    candidate = ".".join(parts[i:j])
+                    if candidate in current:
+                        current = current[candidate]
+                        i = j
+                        matched = True
+                        break
+                if not matched:
                     return None
-                current = current[part]
             elif isinstance(current, list):
                 try:
-                    current = current[int(part)]
+                    current = current[int(parts[i])]
+                    i += 1
                 except (ValueError, IndexError):
                     return None
             else:
