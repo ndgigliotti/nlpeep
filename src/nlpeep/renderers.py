@@ -6,9 +6,8 @@ from typing import Any
 
 from rich.markup import escape
 from rich.syntax import Syntax
-from rich.text import Text
 from textual.widget import Widget
-from textual.widgets import DataTable, Markdown, Static, Tree, Collapsible
+from textual.widgets import Collapsible, DataTable, Markdown, Static, Tree
 
 from nlpeep.schema import FieldArchetype, FieldRole, MetricScale
 
@@ -31,9 +30,23 @@ class ValueType(Enum):
 
 # Field names that suggest a value in [0,1] is a score
 _SCORE_NAMES = {
-    "score", "relevance", "similarity", "confidence", "precision",
-    "recall", "f1", "accuracy", "ndcg", "mrr", "map", "bleu", "rouge",
-    "faithfulness", "relevancy", "coherence", "distance",
+    "score",
+    "relevance",
+    "similarity",
+    "confidence",
+    "precision",
+    "recall",
+    "f1",
+    "accuracy",
+    "ndcg",
+    "mrr",
+    "map",
+    "bleu",
+    "rouge",
+    "faithfulness",
+    "relevancy",
+    "coherence",
+    "distance",
 }
 
 
@@ -63,7 +76,11 @@ def classify_value(
     # Pass 1: Role-based
     if role in (FieldRole.QUERY, FieldRole.INPUT):
         if isinstance(value, str):
-            return ValueType.SHORT_TEXT if len(value) < 200 and "\n" not in value else ValueType.LONG_TEXT
+            return (
+                ValueType.SHORT_TEXT
+                if len(value) < 200 and "\n" not in value
+                else ValueType.LONG_TEXT
+            )
     elif role == FieldRole.RESPONSE:
         if isinstance(value, str):
             return ValueType.MARKDOWN
@@ -82,13 +99,13 @@ def classify_value(
     elif role == FieldRole.METRICS:
         if isinstance(value, dict):
             return ValueType.METRIC_DICT
-    elif role == FieldRole.TRACE:
-        if isinstance(value, list) and value:
-            if isinstance(value[0], dict):
-                keys = set(value[0].keys())
-                if {"role", "content"} <= keys:
-                    return ValueType.CHAT_MESSAGES
-                return ValueType.STEP_LIST
+    elif (
+        role == FieldRole.TRACE and isinstance(value, list) and value and isinstance(value[0], dict)
+    ):
+        keys = set(value[0].keys())
+        if {"role", "content"} <= keys:
+            return ValueType.CHAT_MESSAGES
+        return ValueType.STEP_LIST
 
     # Pass 2: Archetype-based (only when no role dictated a type above)
     if archetype is not None and role == FieldRole.UNMAPPED:
@@ -96,8 +113,10 @@ def classify_value(
         if archetype_type is not None:
             # For archetypes that map to list-based types, verify the value is actually a list
             if archetype_type in (
-                ValueType.DOC_LIST, ValueType.CHAT_MESSAGES,
-                ValueType.STEP_LIST, ValueType.SIMPLE_LIST,
+                ValueType.DOC_LIST,
+                ValueType.CHAT_MESSAGES,
+                ValueType.STEP_LIST,
+                ValueType.SIMPLE_LIST,
             ) and not isinstance(value, list):
                 pass  # fall through to structural
             else:
@@ -180,19 +199,27 @@ def render_value(
         return _render_json_raw(value, field_name, {}, None)
 
 
-def _render_short_text(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
+def _render_short_text(
+    value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
+) -> Widget:
     return Static(str(value), classes="field-short-text")
 
 
-def _render_long_text(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
+def _render_long_text(
+    value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
+) -> Widget:
     return Static(str(value), classes="field-long-text")
 
 
-def _render_markdown(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
+def _render_markdown(
+    value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
+) -> Widget:
     return Markdown(str(value), classes="field-markdown")
 
 
-def _render_score(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
+def _render_score(
+    value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
+) -> Widget:
     v = float(value)
     formatted = f"{v:.3f}"
     color = _score_color(v, metric_scale)
@@ -203,8 +230,14 @@ def _render_score(value: Any, field_name: str, sub_fields: dict[str, str], metri
     return Static(text, classes="field-metrics")
 
 
-def _render_metric_dict(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
-    numeric = {k: float(v) for k, v in value.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+def _render_metric_dict(
+    value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
+) -> Widget:
+    numeric = {
+        k: float(v)
+        for k, v in value.items()
+        if isinstance(v, (int, float)) and not isinstance(v, bool)
+    }
     if not numeric:
         return _render_json_raw(value, field_name, sub_fields, None)
     label_width = max(len(k) for k in numeric)
@@ -229,9 +262,13 @@ def _render_metric_dict(value: Any, field_name: str, sub_fields: dict[str, str],
     return Static("\n".join(lines), classes="field-metrics")
 
 
-def _render_doc_list(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
-    from nlpeep.widgets.doc_card import DocCard
+def _render_doc_list(
+    value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
+) -> Widget:
     from textual.containers import Vertical
+
+    from nlpeep.widgets.doc_card import DocCard
+
     cards = []
     for i, doc in enumerate(value):
         if isinstance(doc, dict):
@@ -241,8 +278,11 @@ def _render_doc_list(value: Any, field_name: str, sub_fields: dict[str, str], me
     return Vertical(*cards, classes="field-docs")
 
 
-def _render_chat_messages(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
+def _render_chat_messages(
+    value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
+) -> Widget:
     from textual.containers import Vertical
+
     widgets: list[Widget] = []
     for msg in value:
         if not isinstance(msg, dict):
@@ -268,7 +308,10 @@ def _render_chat_messages(value: Any, field_name: str, sub_fields: dict[str, str
         if "tool_calls" in msg:
             calls = msg["tool_calls"]
             if isinstance(calls, list):
-                names = [c.get("function", {}).get("name", "?") if isinstance(c, dict) else "?" for c in calls]
+                names = [
+                    c.get("function", {}).get("name", "?") if isinstance(c, dict) else "?"
+                    for c in calls
+                ]
                 extra = f"\n[dim]Tool calls: {', '.join(names)}[/dim]"
 
         text = f"{header}\n{escape(str(content))}{extra}"
@@ -277,8 +320,11 @@ def _render_chat_messages(value: Any, field_name: str, sub_fields: dict[str, str
     return Vertical(*widgets, classes="field-chat")
 
 
-def _render_step_list(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
+def _render_step_list(
+    value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
+) -> Widget:
     from textual.containers import Vertical
+
     widgets: list[Widget] = []
     for i, step in enumerate(value):
         if not isinstance(step, dict):
@@ -307,7 +353,9 @@ def _render_step_list(value: Any, field_name: str, sub_fields: dict[str, str], m
     return Vertical(*widgets, classes="field-steps")
 
 
-def _render_flat_dict(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
+def _render_flat_dict(
+    value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
+) -> Widget:
     table = DataTable(classes="field-flat-dict")
     table.add_columns("Field", "Value")
     for k, v in value.items():
@@ -315,7 +363,9 @@ def _render_flat_dict(value: Any, field_name: str, sub_fields: dict[str, str], m
     return table
 
 
-def _render_nested_dict(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
+def _render_nested_dict(
+    value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
+) -> Widget:
     tree: Tree[str] = Tree(field_name or "Object", classes="field-tree")
     _build_tree(tree.root, value)
     tree.root.expand_all()
@@ -341,7 +391,9 @@ def _build_tree(node: Any, data: Any) -> None:
         node.add_leaf(escape(str(data)))
 
 
-def _render_simple_list(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
+def _render_simple_list(
+    value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
+) -> Widget:
     items = [f"  [dim]{BULLET}[/dim] {escape(str(item))}" for item in value]
     return Static("\n".join(items), classes="field-list")
 
@@ -349,7 +401,9 @@ def _render_simple_list(value: Any, field_name: str, sub_fields: dict[str, str],
 BULLET = "\u2022"
 
 
-def _render_table(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
+def _render_table(
+    value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
+) -> Widget:
     if not value:
         return Static("(empty)", classes="field-table")
 
@@ -379,7 +433,9 @@ def _render_table(value: Any, field_name: str, sub_fields: dict[str, str], metri
     return table
 
 
-def _render_json_raw(value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None) -> Widget:
+def _render_json_raw(
+    value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
+) -> Widget:
     text = json.dumps(value, indent=2, ensure_ascii=False, default=str)
     syntax = Syntax(text, "json", theme="monokai", line_numbers=False)
     return Static(syntax, classes="field-json")

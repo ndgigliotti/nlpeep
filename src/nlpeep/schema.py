@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class FieldRole(str, Enum):
+class FieldRole(StrEnum):
     QUERY = "query"
     INPUT = "input"
     RESPONSE = "response"
@@ -34,8 +34,9 @@ class FieldRole(str, Enum):
         }[self]
 
 
-class FieldArchetype(str, Enum):
+class FieldArchetype(StrEnum):
     """Data-property-based classification of a field, independent of its role."""
+
     IDENTIFIER = "identifier"
     FREE_TEXT = "free_text"
     CATEGORY = "category"
@@ -49,40 +50,70 @@ class FieldArchetype(str, Enum):
     NESTED_BLOB = "nested_blob"
 
 
-class MetricScale(str, Enum):
+class MetricScale(StrEnum):
     """Scale of a numeric metric field."""
-    UNIT = "unit"         # [0, 1]
-    PERCENT = "percent"   # [0, 100]
-    UNKNOWN = "unknown"   # scale not determined
+
+    UNIT = "unit"  # [0, 1]
+    PERCENT = "percent"  # [0, 100]
+    UNKNOWN = "unknown"  # scale not determined
 
 
 # Patterns for name-based auto-detection, ordered by specificity
 _ROLE_PATTERNS: list[tuple[FieldRole, re.Pattern[str]]] = [
     (FieldRole.ID, re.compile(r"^(id|_id|record_id|example_id|idx|uuid)$", re.I)),
-    (FieldRole.QUERY, re.compile(
-        r"^(query|question|prompt|user_input|q|user_query|search_query)$", re.I,
-    )),
-    (FieldRole.INPUT, re.compile(
-        r"^(input|text|article|document|source|source_text|sentence"
-        r"|premise|hypothesis|tokens|words)$", re.I,
-    )),
-    (FieldRole.RESPONSE, re.compile(
-        r"^(response|answer|output|result|generation|completion|predicted"
-        r"|llm_response|assistant|reply"
-        r"|summary|abstract|target_text|translation)$", re.I,
-    )),
-    (FieldRole.GROUND_TRUTH, re.compile(
-        r"^(ground_truth|expected|gold|reference|target|label|correct_answer"
-        r"|labels|tags|ner_tags|pos_tags|entities|category|class|highlights"
-        r"|sentiment|classification)$", re.I,
-    )),
-    (FieldRole.DOCUMENTS, re.compile(
-        r"^(documents|docs|retrieved_documents|contexts|passages|chunks"
-        r"|retrieved|retrieved_passages|sources|retrieved_chunks"
-        r"|context|passage|paragraph)$", re.I,
-    )),
-    (FieldRole.METRICS, re.compile(r"^(metrics|scores|evaluation|eval_results|eval|evaluations)$", re.I)),
-    (FieldRole.TRACE, re.compile(r"^(trace|steps|tool_calls|llm_calls|messages|chain|actions|trajectory|history|tool_use|_trace_spans)$", re.I)),
+    (
+        FieldRole.QUERY,
+        re.compile(
+            r"^(query|question|prompt|user_input|q|user_query|search_query)$",
+            re.I,
+        ),
+    ),
+    (
+        FieldRole.INPUT,
+        re.compile(
+            r"^(input|text|article|document|source|source_text|sentence"
+            r"|premise|hypothesis|tokens|words)$",
+            re.I,
+        ),
+    ),
+    (
+        FieldRole.RESPONSE,
+        re.compile(
+            r"^(response|answer|output|result|generation|completion|predicted"
+            r"|llm_response|assistant|reply"
+            r"|summary|abstract|target_text|translation)$",
+            re.I,
+        ),
+    ),
+    (
+        FieldRole.GROUND_TRUTH,
+        re.compile(
+            r"^(ground_truth|expected|gold|reference|target|label|correct_answer"
+            r"|labels|tags|ner_tags|pos_tags|entities|category|class|highlights"
+            r"|sentiment|classification)$",
+            re.I,
+        ),
+    ),
+    (
+        FieldRole.DOCUMENTS,
+        re.compile(
+            r"^(documents|docs|retrieved_documents|contexts|passages|chunks"
+            r"|retrieved|retrieved_passages|sources|retrieved_chunks"
+            r"|context|passage|paragraph)$",
+            re.I,
+        ),
+    ),
+    (
+        FieldRole.METRICS,
+        re.compile(r"^(metrics|scores|evaluation|eval_results|eval|evaluations)$", re.I),
+    ),
+    (
+        FieldRole.TRACE,
+        re.compile(
+            r"^(trace|steps|tool_calls|llm_calls|messages|chain|actions|trajectory|history|tool_use|_trace_spans)$",
+            re.I,
+        ),
+    ),
     (FieldRole.METADATA, re.compile(r"^(metadata|meta|info|config|params|settings|extras)$", re.I)),
 ]
 
@@ -232,14 +263,16 @@ class SchemaMapping:
                         metric_scale = MetricScale(scale_str) if scale_str else None
                     except ValueError:
                         metric_scale = None
-                    mappings.append(FieldMapping(
-                        json_path=p,
-                        role=role,
-                        display_name=display_name,
-                        sub_fields=sub_fields if isinstance(sub_fields, dict) else {},
-                        confidence=1.0,
-                        metric_scale=metric_scale,
-                    ))
+                    mappings.append(
+                        FieldMapping(
+                            json_path=p,
+                            role=role,
+                            display_name=display_name,
+                            sub_fields=sub_fields if isinstance(sub_fields, dict) else {},
+                            confidence=1.0,
+                            metric_scale=metric_scale,
+                        )
+                    )
 
         return cls(mappings=mappings)
 
@@ -303,13 +336,15 @@ class SchemaMapping:
                 # Type guard: input/output roles need text-like samples
                 # (string or list-of-strings), not bare ints.  Ground truth
                 # is exempt -- labels can be ints or int-lists.
-                if role in (FieldRole.QUERY, FieldRole.INPUT, FieldRole.RESPONSE):
-                    if samples and not any(
-                        isinstance(s, str)
-                        or (isinstance(s, list) and s and isinstance(s[0], str))
+                if (
+                    role in (FieldRole.QUERY, FieldRole.INPUT, FieldRole.RESPONSE)
+                    and samples
+                    and not any(
+                        isinstance(s, str) or (isinstance(s, list) and s and isinstance(s[0], str))
                         for s in samples
-                    ):
-                        continue
+                    )
+                ):
+                    continue
                 # Presence guard: IDs should appear in most records.
                 if role == FieldRole.ID and path_counts[dot_path] / total < 0.5:
                     continue
@@ -357,43 +392,45 @@ class SchemaMapping:
             scale = _is_score_like_field(leaf, samples)
             if scale is not None:
                 presence = path_counts[dot_path] / total
-                mappings.append(FieldMapping(
-                    json_path=dot_path,
-                    role=FieldRole.METRICS,
-                    confidence=0.6 * presence,
-                    metric_scale=scale,
-                ))
+                mappings.append(
+                    FieldMapping(
+                        json_path=dot_path,
+                        role=FieldRole.METRICS,
+                        confidence=0.6 * presence,
+                        metric_scale=scale,
+                    )
+                )
 
         # Pass 4: Classify archetypes for all discovered paths.
         # This provides rendering hints even for unmapped fields.
         mapped_paths = {m.json_path for m in mappings}
         for m in mappings:
-            m.archetype = _classify_archetype(
-                m.json_path, path_samples.get(m.json_path, []), total
-            )
+            m.archetype = _classify_archetype(m.json_path, path_samples.get(m.json_path, []), total)
         # Also assign archetypes to remaining top-level fields that
         # were not mapped (they will render via archetype in Details tab).
         for dot_path in sorted_paths:
             if dot_path in mapped_paths:
                 continue
-            arch = _classify_archetype(
-                dot_path, path_samples.get(dot_path, []), total
-            )
+            arch = _classify_archetype(dot_path, path_samples.get(dot_path, []), total)
             # Only store archetype info for leaf fields that are not
             # parents of already-mapped deeper paths, to avoid
             # duplicating container dicts.
-            mappings.append(FieldMapping(
-                json_path=dot_path,
-                role=FieldRole.UNMAPPED,
-                confidence=0.0,
-                archetype=arch,
-            ))
+            mappings.append(
+                FieldMapping(
+                    json_path=dot_path,
+                    role=FieldRole.UNMAPPED,
+                    confidence=0.0,
+                    archetype=arch,
+                )
+            )
 
         return cls(mappings=mappings)
 
 
 def _flatten_record(
-    data: dict[str, Any], prefix: str = "", depth: int = 0,
+    data: dict[str, Any],
+    prefix: str = "",
+    depth: int = 0,
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """Flatten nested dicts into dot-paths, stopping at lists and the depth cap.
 
@@ -445,22 +482,17 @@ def _classify_archetype(path: str, samples: list[Any], total_records: int) -> Fi
                 return FieldArchetype.SCORE
 
     # -- score_dict: dict where all values are numeric --
-    if all(isinstance(s, dict) for s in samples):
-        if all(
-            s and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in s.values())
-            for s in samples
-        ):
-            return FieldArchetype.SCORE_DICT
+    if all(isinstance(s, dict) for s in samples) and all(
+        s and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in s.values())
+        for s in samples
+    ):
+        return FieldArchetype.SCORE_DICT
 
     # -- conversation: list of dicts with role + content pattern --
     if all(isinstance(s, list) for s in samples):
         flat_items = [item for s in samples for item in s if isinstance(item, dict)]
-        if flat_items:
-            if all(
-                "role" in item and "content" in item
-                for item in flat_items[:10]
-            ):
-                return FieldArchetype.CONVERSATION
+        if flat_items and all("role" in item and "content" in item for item in flat_items[:10]):
+            return FieldArchetype.CONVERSATION
 
     # -- ranked_list: list of dicts containing a text field + a numeric field --
     if all(isinstance(s, list) for s in samples):
@@ -488,9 +520,7 @@ def _classify_archetype(path: str, samples: list[Any], total_records: int) -> Fi
         avg_len = sum(len(s) for s in str_samples) / len(str_samples)
         lengths = [len(s) for s in str_samples]
         length_variance = (
-            sum((l - avg_len) ** 2 for l in lengths) / len(lengths)
-            if len(lengths) > 1
-            else 0.0
+            sum((ln - avg_len) ** 2 for ln in lengths) / len(lengths) if len(lengths) > 1 else 0.0
         )
         unique = len(set(str_samples))
         cardinality_ratio = unique / len(str_samples) if str_samples else 1.0
@@ -507,13 +537,12 @@ def _classify_archetype(path: str, samples: list[Any], total_records: int) -> Fi
             return FieldArchetype.FREE_TEXT
 
     # -- flat_record: dict of scalar values --
-    if all(isinstance(s, dict) for s in samples):
-        if all(
-            all(isinstance(v, (str, int, float, bool, type(None))) for v in s.values())
-            for s in samples
-            if s
-        ):
-            return FieldArchetype.FLAT_RECORD
+    if all(isinstance(s, dict) for s in samples) and all(
+        all(isinstance(v, (str, int, float, bool, type(None))) for v in s.values())
+        for s in samples
+        if s
+    ):
+        return FieldArchetype.FLAT_RECORD
 
     # -- nested_blob: anything else complex --
     if any(isinstance(s, (dict, list)) for s in samples):
@@ -595,13 +624,10 @@ def _structural_role(key: str, samples: list[Any]) -> FieldRole:
             return FieldRole.TRACE
 
     # Check if it looks like metrics (dict of numbers)
-    if all(isinstance(s, dict) for s in samples):
-        if all(
-            all(isinstance(v, (int, float)) for v in s.values())
-            for s in samples
-            if s
-        ):
-            return FieldRole.METRICS
+    if all(isinstance(s, dict) for s in samples) and all(
+        all(isinstance(v, int | float) for v in s.values()) for s in samples if s
+    ):
+        return FieldRole.METRICS
 
     return FieldRole.UNMAPPED
 
@@ -629,9 +655,22 @@ def _looks_like_trace(items: list[dict[str, Any]]) -> bool:
 
 
 _SCORE_SUBSTRINGS = {
-    "score", "relevance", "similarity", "confidence", "precision",
-    "recall", "f1", "accuracy", "bleu", "rouge", "coherence",
-    "faithfulness", "relevancy", "ndcg", "mrr", "distance",
+    "score",
+    "relevance",
+    "similarity",
+    "confidence",
+    "precision",
+    "recall",
+    "f1",
+    "accuracy",
+    "bleu",
+    "rouge",
+    "coherence",
+    "faithfulness",
+    "relevancy",
+    "ndcg",
+    "mrr",
+    "distance",
 }
 
 
@@ -640,7 +679,9 @@ def _is_score_like_field(key: str, samples: list[Any]) -> MetricScale | None:
     key_lower = key.lower().replace("_", "").replace("-", "")
     if not any(sub in key_lower for sub in _SCORE_SUBSTRINGS):
         return None
-    numeric_samples = [s for s in samples if isinstance(s, (int, float)) and not isinstance(s, bool)]
+    numeric_samples = [
+        s for s in samples if isinstance(s, (int, float)) and not isinstance(s, bool)
+    ]
     if not numeric_samples:
         return None
     if all(0 <= v <= 1 for v in numeric_samples):

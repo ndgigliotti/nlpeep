@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from collections import Counter
 
 from textual import on
@@ -12,7 +13,6 @@ from textual.widgets import Button, Label, Select, Static
 from nlpeep.config import save_config
 from nlpeep.data import RecordStore
 from nlpeep.schema import FieldMapping, FieldRole, MetricScale, SchemaMapping
-
 
 _ROLE_OPTIONS = [(role.display_name, role.value) for role in FieldRole]
 
@@ -269,19 +269,19 @@ class MappingModal(ModalScreen[SchemaMapping | None]):
             if role == FieldRole.METRICS:
                 scale_select = self._scale_selects.get(field_name)
                 if scale_select and scale_select.value != "auto":
-                    try:
+                    with contextlib.suppress(ValueError):
                         metric_scale = MetricScale(scale_select.value)
-                    except ValueError:
-                        pass
                 elif existing and existing.metric_scale is not None:
                     metric_scale = existing.metric_scale
-            mappings.append(FieldMapping(
-                json_path=field_name,
-                role=role,
-                sub_fields=sub_fields,
-                confidence=1.0,
-                metric_scale=metric_scale,
-            ))
+            mappings.append(
+                FieldMapping(
+                    json_path=field_name,
+                    role=role,
+                    sub_fields=sub_fields,
+                    confidence=1.0,
+                    metric_scale=metric_scale,
+                )
+            )
         return SchemaMapping(mappings=mappings)
 
     @on(Button.Pressed, "#btn-apply")

@@ -49,9 +49,12 @@ class FieldPanel(Widget):
     def compose(self) -> ComposeResult:
         try:
             vtype = classify_value(self.value, self.field_name, self.role, self.archetype)
-            widget = render_value(self.value, vtype, self.field_name, self.sub_fields, self.metric_scale)
+            widget = render_value(
+                self.value, vtype, self.field_name, self.sub_fields, self.metric_scale
+            )
         except Exception:
             import json
+
             fallback = json.dumps(self.value, indent=2, ensure_ascii=False, default=str)
             widget = Static(fallback)
 

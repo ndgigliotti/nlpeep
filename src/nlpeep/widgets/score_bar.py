@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from rich.markup import escape
-from textual.widget import Widget
 from textual.app import ComposeResult
+from textual.widget import Widget
 from textual.widgets import Static
 
 
@@ -41,7 +41,9 @@ class ScoreBar(Widget):
         else:
             color = "$error"
 
-        bar = f"[{color}]{'\u2588' * filled}[/{color}][$surface]{'\u2591' * empty}[/$surface]"
+        filled_char = "\u2588"
+        empty_char = "\u2591"
+        bar = f"[{color}]{filled_char * filled}[/{color}][$surface]{empty_char * empty}[/$surface]"
         if self.label:
             padded = self.label.rjust(self.label_width) if self.label_width else self.label
             label_part = f"[bold $text]{escape(padded)}[/bold $text]  "

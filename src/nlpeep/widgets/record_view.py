@@ -41,7 +41,9 @@ class RecordContent(Widget):
         record = self.record
         mapping = self.mapping
         active_roles = mapping.active_roles()
-        tab_roles = [r for r in active_roles if r not in (FieldRole.QUERY, FieldRole.INPUT, FieldRole.ID)]
+        tab_roles = [
+            r for r in active_roles if r not in (FieldRole.QUERY, FieldRole.INPUT, FieldRole.ID)
+        ]
 
         has_response = FieldRole.RESPONSE in active_roles
         has_ground_truth = FieldRole.GROUND_TRUTH in active_roles
