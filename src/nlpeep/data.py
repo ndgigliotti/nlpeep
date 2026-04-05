@@ -206,8 +206,11 @@ class RecordStore:
             return self
 
         # Step 2: For each candidate, check structural heterogeneity within groups.
+        # Prefer the candidate with the lowest cardinality (fewest groups =
+        # most records per group), which is the most likely trace grouping key.
         best_field: str | None = None
         best_groups: dict[str | int, list[Record]] = {}
+        best_cardinality = len(self.records) + 1
 
         for field_name in candidates:
             groups: dict[str | int, list[Record]] = {}
@@ -229,10 +232,10 @@ class RecordStore:
                     heterogeneous = True
                     break
 
-            if heterogeneous:
+            if heterogeneous and len(groups) < best_cardinality:
                 best_field = field_name
                 best_groups = groups
-                break
+                best_cardinality = len(groups)
 
         if best_field is None:
             return self
