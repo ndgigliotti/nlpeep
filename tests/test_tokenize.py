@@ -16,18 +16,27 @@ from nlpeep.schema import (
 
 class TestDepluralize:
     @pytest.mark.parametrize("token, expected", [
+        # regular -s
         ("metrics", "metric"),
         ("scores", "score"),
         ("documents", "document"),
         ("passages", "passage"),
+        ("steps", "step"),
+        # -ies -> -y
         ("entities", "entity"),
         ("categories", "category"),
+        # -sses/-xes/-zes -> strip -es
         ("classes", "class"),
         ("indexes", "index"),
-        ("steps", "step"),
+        # -se + s should strip -s, not -es
+        ("responses", "response"),
+        ("phrases", "phrase"),
+        ("databases", "database"),
         # should not strip
         ("class", "class"),
         ("miss", "miss"),       # ends in "ss" -- leave alone
+        ("status", "status"),   # Latin singular ending in -us
+        ("bias", "bias"),       # singular ending in -as
         ("id", "id"),           # too short
         ("is", "is"),           # too short
     ])
@@ -77,7 +86,7 @@ class TestTokenizeName:
     @pytest.mark.parametrize("name, expected", [
         ("kebab-case", ["kebab", "case"]),
         ("dot.separated", ["dot", "separated"]),
-        ("has spaces", ["ha", "space"]),
+        ("has spaces", ["has", "space"]),
         ("Ground Truth", ["ground", "truth"]),
         ("NER Tags", ["ner", "tag"]),
     ])
