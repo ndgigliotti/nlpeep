@@ -20,12 +20,14 @@ class ScoreBar(Widget):
         self,
         value: float,
         label: str = "",
+        label_width: int = 0,
         bar_width: int = 20,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self.value = max(0.0, min(1.0, value))
         self.label = label
+        self.label_width = label_width
         self.bar_width = bar_width
 
     def compose(self) -> ComposeResult:
@@ -40,6 +42,10 @@ class ScoreBar(Widget):
             color = "$error"
 
         bar = f"[{color}]{'\u2588' * filled}[/{color}][$surface]{'\u2591' * empty}[/$surface]"
-        label_part = f"[bold $text]{escape(self.label)}[/bold $text]  " if self.label else ""
+        if self.label:
+            padded = self.label.rjust(self.label_width) if self.label_width else self.label
+            label_part = f"[bold $text]{escape(padded)}[/bold $text]  "
+        else:
+            label_part = ""
         text = f"{label_part}{bar}  [bold {color}]{self.value:.3f}[/bold {color}]"
         yield Static(text)

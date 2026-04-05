@@ -142,12 +142,11 @@ def _render_score(value: Any, field_name: str, sub_fields: dict[str, str]) -> Wi
 def _render_metric_dict(value: Any, field_name: str, sub_fields: dict[str, str]) -> Widget:
     from nlpeep.widgets.score_bar import ScoreBar
     from textual.containers import Vertical
-    bars = []
-    for k, v in value.items():
-        if isinstance(v, (int, float)) and not isinstance(v, bool):
-            bars.append(ScoreBar(value=float(v), label=k))
-    if not bars:
+    numeric = {k: float(v) for k, v in value.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    if not numeric:
         return _render_json_raw(value, field_name, sub_fields)
+    label_width = max(len(k) for k in numeric)
+    bars = [ScoreBar(value=v, label=k, label_width=label_width) for k, v in numeric.items()]
     return Vertical(*bars, classes="field-metrics")
 
 
