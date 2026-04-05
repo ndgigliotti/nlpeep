@@ -23,7 +23,7 @@ class NLPeepApp(App):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("ctrl+m", "open_mapping", "Mapping"),
+        Binding("m", "open_mapping", "Mapping"),
         Binding("ctrl+r", "reload", "Reload"),
         Binding("ctrl+f", "focus_search", "Search"),
         Binding("escape", "unfocus_search", "Unfocus", show=False),
@@ -109,7 +109,7 @@ class NLPeepApp(App):
                 roles = self._mapping.active_roles()
                 role_names = ", ".join(r.display_name for r in roles)
                 self.notify(
-                    f"Auto-detected: {role_names}. Press Ctrl+M to adjust.",
+                    f"Auto-detected: {role_names}. Press M to adjust.",
                     timeout=5,
                 )
 
@@ -146,7 +146,7 @@ class NLPeepApp(App):
         self._select_record(event.index)
 
     def action_open_mapping(self) -> None:
-        if not self._store:
+        if not self._store or self._input_focused():
             return
 
         def on_dismiss(result: SchemaMapping | None) -> None:
