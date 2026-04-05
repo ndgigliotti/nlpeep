@@ -79,6 +79,9 @@ class NLPeepApp(App):
             self.notify("No valid records found", severity="error")
             return
 
+        # Attempt trace assembly for multi-span pipeline data
+        self._store = self._store.maybe_assemble_traces()
+
         # Try to load mapping from config, fall back to auto-detect
         mapping = load_mapping(self._path, self._config_path)
         if mapping and mapping.mappings:

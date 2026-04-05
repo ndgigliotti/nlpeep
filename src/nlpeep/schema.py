@@ -55,7 +55,7 @@ _ROLE_PATTERNS: list[tuple[FieldRole, re.Pattern[str]]] = [
     (FieldRole.GROUND_TRUTH, re.compile(r"^(ground_truth|expected|gold|reference|target|label|correct_answer)$", re.I)),
     (FieldRole.DOCUMENTS, re.compile(r"^(documents|docs|retrieved_documents|contexts|passages|chunks|retrieved|retrieved_passages|sources|retrieved_chunks)$", re.I)),
     (FieldRole.METRICS, re.compile(r"^(metrics|scores|evaluation|eval_results|eval|evaluations)$", re.I)),
-    (FieldRole.TRACE, re.compile(r"^(trace|steps|tool_calls|llm_calls|messages|chain|actions|trajectory|history|tool_use)$", re.I)),
+    (FieldRole.TRACE, re.compile(r"^(trace|steps|tool_calls|llm_calls|messages|chain|actions|trajectory|history|tool_use|_trace_spans)$", re.I)),
     (FieldRole.METADATA, re.compile(r"^(metadata|meta|info|config|params|settings|extras)$", re.I)),
 ]
 
