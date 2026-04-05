@@ -41,7 +41,7 @@ class RecordContent(Widget):
         record = self.record
         mapping = self.mapping
         active_roles = mapping.active_roles()
-        tab_roles = [r for r in active_roles if r not in (FieldRole.QUERY, FieldRole.ID)]
+        tab_roles = [r for r in active_roles if r not in (FieldRole.QUERY, FieldRole.INPUT, FieldRole.ID)]
 
         has_response = FieldRole.RESPONSE in active_roles
         has_ground_truth = FieldRole.GROUND_TRUTH in active_roles
@@ -188,8 +188,11 @@ class RecordView(Widget):
         # Update query header
         header = self.query_one("#query-header", Static)
         query_val = mapping.resolve(record.data, FieldRole.QUERY)
-        if query_val:
-            header.update(f"[bold]Q:[/bold] {query_val}")
+        input_val = mapping.resolve(record.data, FieldRole.INPUT) if not query_val else None
+        primary_val = query_val or input_val
+        if primary_val:
+            prefix = "Q:" if query_val else "Input:"
+            header.update(f"[bold]{prefix}[/bold] {primary_val}")
         else:
             header.update(f"[dim]Record {record.index}[/dim]")
 
