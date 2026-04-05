@@ -75,36 +75,74 @@ def _tokenize_name(name: str) -> list[str]:
 # Token-based role keywords.  A field matches a role when any of its
 # tokens appears in the keyword set.  Checked in order; first match wins.
 _ROLE_KEYWORDS: list[tuple[FieldRole, frozenset[str]]] = [
-    (FieldRole.ID, frozenset({"id", "idx", "uuid"})),
+    (FieldRole.ID, frozenset({
+        "id", "idx", "uuid", "uid", "guid", "hash", "key",
+        "index", "rowid",
+    })),
     (FieldRole.QUERY, frozenset({
-        "query", "question", "prompt",
+        # questions and prompts
+        "query", "question", "prompt", "ask", "request",
+        # search-specific
+        "search", "lookup", "instruction",
     })),
     (FieldRole.INPUT, frozenset({
-        "input", "article", "source", "sentence",
-        "premise", "hypothesis", "tokens", "words",
+        # generic input
+        "input", "source", "original", "raw",
+        # document-as-input
+        "article", "body", "content",
+        "sentence", "utterance", "statement", "turn",
+        # NLI / entailment
+        "premise", "hypothesis",
+        # tokenized input
+        "tokens", "words", "token",
     })),
     (FieldRole.RESPONSE, frozenset({
-        "response", "answer", "output", "result", "generation",
-        "completion", "predicted", "reply",
-        "summary", "abstract", "translation",
+        # model outputs
+        "response", "output", "result", "generation",
+        "completion", "predicted", "prediction", "reply",
+        "generated", "decoded", "produced",
+        # summarization / translation
+        "summary", "abstract", "synopsis", "digest",
+        "translation", "translated", "paraphrase",
+        # answers (when not ground truth)
+        "answer",
     })),
     (FieldRole.GROUND_TRUTH, frozenset({
+        # explicit ground truth names
         "truth", "expected", "gold", "reference", "target",
-        "label", "tags", "entities", "highlights",
+        "actual", "oracle", "human",
+        # labels and annotations
+        "label", "annotation", "annotated", "tagged",
+        "tags", "entities", "spans", "slots",
+        # classification targets
         "sentiment", "classification", "category", "class",
+        "topic", "intent", "emotion", "polarity",
+        # specific reference outputs
+        "highlights", "headline",
     })),
     (FieldRole.DOCUMENTS, frozenset({
-        "documents", "docs", "contexts", "passages", "chunks",
-        "retrieved", "context", "passage", "paragraph",
+        # retrieved / reference documents
+        "documents", "docs", "contexts", "passages",
+        "chunks", "retrieved", "context",
+        "paragraph", "paragraphs", "excerpts", "snippets",
+        "evidence", "corpus", "knowledge",
     })),
     (FieldRole.METRICS, frozenset({
+        # evaluation and scoring
         "metrics", "scores", "evaluation", "eval",
+        "performance", "measure", "benchmark",
     })),
     (FieldRole.TRACE, frozenset({
+        # execution traces
         "trace", "steps", "trajectory", "history",
+        "chain", "actions", "calls", "log",
+        "turns", "reasoning", "thoughts",
     })),
     (FieldRole.METADATA, frozenset({
-        "metadata", "meta", "config", "params", "settings", "extras",
+        # metadata and config
+        "metadata", "meta", "config", "params",
+        "settings", "extras", "attributes", "properties",
+        "options", "args", "kwargs", "hyperparams",
     })),
 ]
 
@@ -113,6 +151,7 @@ _EXACT_KEYWORDS: dict[str, FieldRole] = {
     "q": FieldRole.QUERY,
     "text": FieldRole.INPUT,
     "document": FieldRole.INPUT,
+    "correct": FieldRole.GROUND_TRUTH,
     "info": FieldRole.METADATA,
 }
 
