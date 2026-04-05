@@ -13,8 +13,9 @@ build/
 .pytest_cache/
 .mypy_cache/
 
-# Claude Code
-.claude/
+# Claude Code (keep .claude/skills/ tracked)
+.claude/*
+!.claude/skills/
 
 # OS
 .DS_Store
