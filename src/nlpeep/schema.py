@@ -8,6 +8,7 @@ from typing import Any
 
 class FieldRole(str, Enum):
     QUERY = "query"
+    INPUT = "input"
     RESPONSE = "response"
     DOCUMENTS = "documents"
     METRICS = "metrics"
@@ -21,6 +22,7 @@ class FieldRole(str, Enum):
     def display_name(self) -> str:
         return {
             FieldRole.QUERY: "Query",
+            FieldRole.INPUT: "Input",
             FieldRole.RESPONSE: "Response",
             FieldRole.DOCUMENTS: "Documents",
             FieldRole.METRICS: "Metrics",
@@ -50,10 +52,28 @@ class FieldArchetype(str, Enum):
 # Patterns for name-based auto-detection, ordered by specificity
 _ROLE_PATTERNS: list[tuple[FieldRole, re.Pattern[str]]] = [
     (FieldRole.ID, re.compile(r"^(id|_id|record_id|example_id|idx|uuid)$", re.I)),
-    (FieldRole.QUERY, re.compile(r"^(query|question|input|prompt|user_input|q|user_query|search_query)$", re.I)),
-    (FieldRole.RESPONSE, re.compile(r"^(response|answer|output|result|generation|completion|predicted|llm_response|assistant|reply)$", re.I)),
-    (FieldRole.GROUND_TRUTH, re.compile(r"^(ground_truth|expected|gold|reference|target|label|correct_answer)$", re.I)),
-    (FieldRole.DOCUMENTS, re.compile(r"^(documents|docs|retrieved_documents|contexts|passages|chunks|retrieved|retrieved_passages|sources|retrieved_chunks)$", re.I)),
+    (FieldRole.QUERY, re.compile(
+        r"^(query|question|prompt|user_input|q|user_query|search_query)$", re.I,
+    )),
+    (FieldRole.INPUT, re.compile(
+        r"^(input|text|article|document|source|source_text|sentence"
+        r"|premise|hypothesis|tokens|words)$", re.I,
+    )),
+    (FieldRole.RESPONSE, re.compile(
+        r"^(response|answer|output|result|generation|completion|predicted"
+        r"|llm_response|assistant|reply"
+        r"|summary|abstract|target_text|translation)$", re.I,
+    )),
+    (FieldRole.GROUND_TRUTH, re.compile(
+        r"^(ground_truth|expected|gold|reference|target|label|correct_answer"
+        r"|labels|tags|ner_tags|pos_tags|entities|category|class|highlights"
+        r"|sentiment|classification)$", re.I,
+    )),
+    (FieldRole.DOCUMENTS, re.compile(
+        r"^(documents|docs|retrieved_documents|contexts|passages|chunks"
+        r"|retrieved|retrieved_passages|sources|retrieved_chunks"
+        r"|context|passage|paragraph)$", re.I,
+    )),
     (FieldRole.METRICS, re.compile(r"^(metrics|scores|evaluation|eval_results|eval|evaluations)$", re.I)),
     (FieldRole.TRACE, re.compile(r"^(trace|steps|tool_calls|llm_calls|messages|chain|actions|trajectory|history|tool_use)$", re.I)),
     (FieldRole.METADATA, re.compile(r"^(metadata|meta|info|config|params|settings|extras)$", re.I)),
@@ -145,7 +165,7 @@ class SchemaMapping:
         return None
 
     def label_path(self) -> str | None:
-        for role in (FieldRole.QUERY, FieldRole.ID):
+        for role in (FieldRole.QUERY, FieldRole.INPUT, FieldRole.ID):
             m = self.get_mapping(role)
             if m:
                 return m.json_path
@@ -244,15 +264,29 @@ class SchemaMapping:
 
             samples = path_samples.get(dot_path, [])
 
+            is_nested = "." in dot_path
+
             for role, pattern in _ROLE_PATTERNS:
                 if role in claimed_roles:
                     continue
                 if not any(pattern.match(c) for c in candidates):
                     continue
-                # Type guard: text roles must have string samples,
-                # not ints (avoids matching "prompt" in token counts).
-                if role in (FieldRole.QUERY, FieldRole.RESPONSE, FieldRole.GROUND_TRUTH):
-                    if samples and not any(isinstance(s, str) for s in samples):
+                # Depth guard: generic names like "text" are ambiguous
+                # when nested (e.g. "answers.text").  Skip nested
+                # matches for INPUT only, since QUERY and RESPONSE
+                # names (question, prompt, response, etc.) are
+                # specific enough to be meaningful at any depth.
+                if is_nested and role == FieldRole.INPUT:
+                    continue
+                # Type guard: input/output roles need text-like samples
+                # (string or list-of-strings), not bare ints.  Ground truth
+                # is exempt -- labels can be ints or int-lists.
+                if role in (FieldRole.QUERY, FieldRole.INPUT, FieldRole.RESPONSE):
+                    if samples and not any(
+                        isinstance(s, str)
+                        or (isinstance(s, list) and s and isinstance(s[0], str))
+                        for s in samples
+                    ):
                         continue
                 # Presence guard: IDs should appear in most records.
                 if role == FieldRole.ID and path_counts[dot_path] / total < 0.5:

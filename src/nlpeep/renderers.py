@@ -61,7 +61,7 @@ def classify_value(
 ) -> ValueType:
     """Three-pass classification: role-based first, archetype second, then structural."""
     # Pass 1: Role-based
-    if role == FieldRole.QUERY:
+    if role in (FieldRole.QUERY, FieldRole.INPUT):
         if isinstance(value, str):
             return ValueType.SHORT_TEXT if len(value) < 200 and "\n" not in value else ValueType.LONG_TEXT
     elif role == FieldRole.RESPONSE:
@@ -70,6 +70,10 @@ def classify_value(
     elif role == FieldRole.GROUND_TRUTH:
         if isinstance(value, str):
             return ValueType.MARKDOWN
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return ValueType.SHORT_TEXT
+        if isinstance(value, list):
+            return ValueType.SIMPLE_LIST
     elif role == FieldRole.DOCUMENTS:
         if isinstance(value, list):
             if value and isinstance(value[0], dict):
