@@ -4,7 +4,7 @@ import contextlib
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static
 
@@ -23,6 +23,24 @@ _VOICE_OPTIONS: list[tuple[str, str]] = [
     ("custom...", "__custom__"),
 ]
 
+_FORMAT_OPTIONS: list[tuple[str, str]] = [
+    ("mp3 (default)", "mp3"),
+    ("opus", "opus"),
+    ("aac", "aac"),
+    ("flac", "flac"),
+    ("wav", "wav"),
+    ("pcm", "pcm"),
+]
+
+_AZURE_PROVIDER_OPTIONS: list[tuple[str, str]] = [
+    ("None (use api_key)", ""),
+    ("DefaultAzureCredential", "default"),
+    ("AzureCliCredential", "cli"),
+    ("EnvironmentCredential", "env"),
+    ("WorkloadIdentityCredential", "workload"),
+    ("ManagedIdentityCredential", "managed"),
+]
+
 
 class TTSModal(ModalScreen[bool]):
     """Modal for configuring TTS provider settings."""
@@ -32,7 +50,8 @@ class TTSModal(ModalScreen[bool]):
         align: center middle;
     }
     TTSModal #modal-container {
-        width: 72;
+        width: 76;
+        max-height: 90%;
         border: thick $primary;
         background: $surface;
         padding: 1 2;
@@ -41,6 +60,12 @@ class TTSModal(ModalScreen[bool]):
         text-align: center;
         text-style: bold;
         padding: 0 0 1 0;
+    }
+    TTSModal .section-header {
+        text-style: bold dim;
+        padding: 1 0 0 0;
+        border-top: solid $primary-background-lighten-1;
+        margin-top: 1;
     }
     TTSModal .field-label {
         padding: 1 0 0 0;
@@ -72,58 +97,108 @@ class TTSModal(ModalScreen[bool]):
         known_voices = {v for _, v in _VOICE_OPTIONS if v != "__custom__"}
         voice_select_val = "__custom__" if current_voice not in known_voices else current_voice
 
+        current_format = config.get("response_format", "mp3")
+        current_provider = config.get("azure_ad_token_provider", "")
+
         with Vertical(id="modal-container"):
             yield Static("TTS Configuration", id="modal-title")
-
-            yield Label("Model (litellm format):", classes="field-label")
-            yield Input(
-                value=config.get("model", "openai/tts-1"),
-                placeholder="openai/tts-1",
-                id="input-model",
-            )
-            yield Static(
-                "e.g.  openai/tts-1  |  openai/tts-1-hd  |  azure/<deployment>",
-                classes="hint",
-            )
-
-            yield Label("Voice:", classes="field-label")
-            yield Select(
-                _VOICE_OPTIONS,
-                value=voice_select_val,
-                allow_blank=False,
-                id="select-voice",
-            )
-            with Horizontal(id="custom-voice-row"):
+            with VerticalScroll():
+                # -- Audio --
+                yield Label("Model (litellm format):", classes="field-label")
                 yield Input(
-                    value=current_voice if voice_select_val == "__custom__" else "",
-                    placeholder="enter voice name",
-                    id="input-custom-voice",
+                    value=config.get("model", "openai/tts-1"),
+                    placeholder="openai/tts-1",
+                    id="input-model",
                 )
-            self._update_custom_row_visibility(voice_select_val)
+                yield Static(
+                    "e.g.  openai/tts-1  |  openai/tts-1-hd  |  azure/<deployment>",
+                    classes="hint",
+                )
 
-            yield Label("Speed (0.25 - 4.0, blank for default):", classes="field-label")
-            speed = config.get("speed")
-            yield Input(
-                value=str(speed) if speed is not None else "",
-                placeholder="1.0",
-                id="input-speed",
-            )
+                yield Label("Voice:", classes="field-label")
+                yield Select(
+                    _VOICE_OPTIONS,
+                    value=voice_select_val,
+                    allow_blank=False,
+                    id="select-voice",
+                )
+                with Horizontal(id="custom-voice-row"):
+                    yield Input(
+                        value=current_voice if voice_select_val == "__custom__" else "",
+                        placeholder="enter voice name",
+                        id="input-custom-voice",
+                    )
+                self._update_custom_row_visibility(voice_select_val)
 
-            yield Label("API Key:", classes="field-label")
-            yield Input(
-                value=config.get("api_key", ""),
-                placeholder="os.environ/OPENAI_API_KEY",
-                id="input-api-key",
-                password=False,
-            )
-            yield Static("Use  os.environ/VAR_NAME  to read from environment", classes="hint")
+                yield Label("Speed (0.25 - 4.0, blank for default):", classes="field-label")
+                speed = config.get("speed")
+                yield Input(
+                    value=str(speed) if speed is not None else "",
+                    placeholder="1.0",
+                    id="input-speed",
+                )
 
-            yield Label("API Base URL (optional):", classes="field-label")
-            yield Input(
-                value=config.get("api_base", ""),
-                placeholder="https://api.openai.com/v1",
-                id="input-api-base",
-            )
+                yield Label("Response Format:", classes="field-label")
+                yield Select(
+                    _FORMAT_OPTIONS,
+                    value=current_format,
+                    allow_blank=False,
+                    id="select-format",
+                )
+
+                # -- API --
+                yield Static("API", classes="section-header")
+
+                yield Label("API Key:", classes="field-label")
+                yield Input(
+                    value=config.get("api_key", ""),
+                    placeholder="os.environ/OPENAI_API_KEY",
+                    id="input-api-key",
+                )
+                yield Static(
+                    "Use  os.environ/VAR_NAME  to read from environment",
+                    classes="hint",
+                )
+
+                yield Label("API Base URL:", classes="field-label")
+                yield Input(
+                    value=config.get("api_base", ""),
+                    placeholder="https://api.openai.com/v1",
+                    id="input-api-base",
+                )
+
+                yield Label("API Version (Azure):", classes="field-label")
+                yield Input(
+                    value=config.get("api_version", ""),
+                    placeholder="2024-05-01-preview",
+                    id="input-api-version",
+                )
+
+                # -- Azure AD --
+                yield Static("Azure AD Authentication", classes="section-header")
+
+                yield Label("Token Provider:", classes="field-label")
+                yield Select(
+                    _AZURE_PROVIDER_OPTIONS,
+                    value=current_provider,
+                    allow_blank=False,
+                    id="select-azure-provider",
+                )
+                yield Static(
+                    "Requires  azure-identity:  uv pip install azure-identity",
+                    classes="hint",
+                )
+
+                # -- Advanced --
+                yield Static("Advanced", classes="section-header")
+
+                yield Label("Timeout (seconds, blank for default):", classes="field-label")
+                timeout = config.get("timeout")
+                yield Input(
+                    value=str(timeout) if timeout is not None else "",
+                    placeholder="30",
+                    id="input-timeout",
+                )
 
             with Horizontal(id="modal-buttons"):
                 yield Button("Save", variant="primary", id="btn-save")
@@ -162,6 +237,10 @@ class TTSModal(ModalScreen[bool]):
             with contextlib.suppress(ValueError):
                 tts["speed"] = float(speed_str)
 
+        fmt = self.query_one("#select-format", Select)
+        if fmt.value and fmt.value != Select.BLANK and fmt.value != "mp3":
+            tts["response_format"] = str(fmt.value)
+
         api_key = self.query_one("#input-api-key", Input).value.strip()
         if api_key:
             tts["api_key"] = api_key
@@ -169,6 +248,19 @@ class TTSModal(ModalScreen[bool]):
         api_base = self.query_one("#input-api-base", Input).value.strip()
         if api_base:
             tts["api_base"] = api_base
+
+        api_version = self.query_one("#input-api-version", Input).value.strip()
+        if api_version:
+            tts["api_version"] = api_version
+
+        provider = self.query_one("#select-azure-provider", Select)
+        if provider.value and provider.value != Select.BLANK:
+            tts["azure_ad_token_provider"] = str(provider.value)
+
+        timeout_str = self.query_one("#input-timeout", Input).value.strip()
+        if timeout_str:
+            with contextlib.suppress(ValueError):
+                tts["timeout"] = float(timeout_str)
 
         config["tts"] = tts
         path = save_user_config(config)
