@@ -15,6 +15,7 @@ from nlpeep.schema import SchemaMapping
 from nlpeep.widgets.mapping_modal import MappingModal
 from nlpeep.widgets.navigator import RecordNavigator
 from nlpeep.widgets.record_view import RecordView
+from nlpeep.widgets.tts_modal import TTSModal
 
 
 class NLPeepApp(App):
@@ -28,6 +29,7 @@ class NLPeepApp(App):
         Binding("ctrl+f", "focus_search", "Search"),
         Binding("escape", "unfocus_search", "Unfocus", show=False),
         Binding("ctrl+s", "speak", "Speak"),
+        Binding("ctrl+t", "tts_settings", "TTS"),
         Binding("j", "next_record", "Next", show=False),
         Binding("k", "prev_record", "Prev", show=False),
     ]
@@ -246,6 +248,11 @@ class NLPeepApp(App):
         self.notify("Speaking...")
         self._do_speak(text)
 
+    def action_tts_settings(self) -> None:
+        if self._input_focused():
+            return
+        self.push_screen(TTSModal())
+
     @work(thread=True, exclusive=True, group="tts")
     def _do_speak(self, text: str) -> None:
         from nlpeep import tts
@@ -257,28 +264,17 @@ class NLPeepApp(App):
             self.call_from_thread(self.notify, f"TTS error: {exc}", severity="error")
 
     def _get_speakable_text(self) -> str:
-        """Extract text from query header and active tab content."""
+        """Extract text from the active tab's content."""
         parts: list[str] = []
         try:
-            view = self.query_one(RecordView)
-            if not view._record or not view._mapping:
-                return ""
-            record = view._record
-            mapping = view._mapping
-
-            from nlpeep.schema import FieldRole
-
-            query_val = mapping.resolve(record.data, FieldRole.QUERY)
-            input_val = mapping.resolve(record.data, FieldRole.INPUT) if not query_val else None
-            primary = query_val or input_val
-            if primary and isinstance(primary, str):
-                parts.append(primary)
-
             from textual.widgets import TabbedContent
 
             from nlpeep.widgets.field_panel import FieldPanel
+            from nlpeep.widgets.record_view import RecordContent
 
-            tabbed = view.query_one(TabbedContent)
+            view = self.query_one(RecordView)
+            content = view.query_one(RecordContent)
+            tabbed = content.query_one(TabbedContent)
             active_pane = tabbed.active_pane
             if active_pane:
                 for fp in active_pane.query(FieldPanel):
