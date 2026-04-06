@@ -50,6 +50,24 @@ class RecordContent(Widget):
         do_comparison = has_response and has_ground_truth
 
         with TabbedContent():
+            # Primary input text gets its own tab (header is just a preview).
+            for primary_role in (FieldRole.QUERY, FieldRole.INPUT):
+                primary_mapping = mapping.get_mapping(primary_role)
+                if not primary_mapping:
+                    continue
+                val = mapping.resolve(record.data, primary_role)
+                if val is not None:
+                    yield TabPane(
+                        primary_role.display_name,
+                        FieldPanel(
+                            field_name=primary_mapping.json_path,
+                            value=val,
+                            role=primary_role,
+                            show_label=False,
+                        ),
+                    )
+                break  # only one primary role
+
             for role in tab_roles:
                 if do_comparison and role in (FieldRole.RESPONSE, FieldRole.GROUND_TRUTH):
                     if role == FieldRole.GROUND_TRUTH:
@@ -194,7 +212,10 @@ class RecordView(Widget):
         primary_val = query_val or input_val
         if primary_val:
             prefix = "Q:" if query_val else "Input:"
-            header.update(f"[bold]{prefix}[/bold] {primary_val}")
+            display_val = primary_val
+            if isinstance(display_val, str) and len(display_val) > 500:
+                display_val = display_val[:500] + "..."
+            header.update(f"[bold]{prefix}[/bold] {display_val}")
         else:
             header.update(f"[dim]Record {record.index}[/dim]")
 

@@ -454,11 +454,16 @@ class SchemaMapping:
         for dot_path in sorted_paths:
             # Build candidate names from the original key (preserves
             # Phoenix-style dotted keys like "input.value") and the
-            # flattened leaf name.
+            # flattened leaf name.  For nested paths, also consider
+            # parent segments so "translation.en" picks up "translation".
             original_key = path_keys.get(dot_path, dot_path.rsplit(".", 1)[-1])
             candidates = [original_key]
             if "." in original_key:
                 candidates.extend(original_key.split("."))
+            if "." in dot_path:
+                for segment in dot_path.split("."):
+                    if segment not in candidates:
+                        candidates.append(segment)
 
             # Tokenize all candidate names for keyword matching.
             tokens: set[str] = set()
@@ -483,11 +488,17 @@ class SchemaMapping:
                 # are ambiguous when nested (e.g. "answers.text").
                 if is_nested and role == FieldRole.INPUT:
                     continue
-                # Type guard: input/output roles need text-like samples
-                # (string or list-of-strings), not bare ints.  Ground truth
-                # is exempt -- labels can be ints or int-lists.
+                # Type guard: QUERY/INPUT need plain strings (not lists).
+                # RESPONSE allows strings or lists-of-strings.
+                # Ground truth is exempt -- labels can be ints or int-lists.
                 if (
-                    role in (FieldRole.QUERY, FieldRole.INPUT, FieldRole.RESPONSE)
+                    role in (FieldRole.QUERY, FieldRole.INPUT)
+                    and samples
+                    and not any(isinstance(s, str) for s in samples)
+                ):
+                    continue
+                if (
+                    role == FieldRole.RESPONSE
                     and samples
                     and not any(
                         isinstance(s, str) or (isinstance(s, list) and s and isinstance(s[0], str))
@@ -495,9 +506,39 @@ class SchemaMapping:
                     )
                 ):
                     continue
-                # Presence guard: IDs should appear in most records.
-                if role == FieldRole.ID and path_counts[dot_path] / total < 0.5:
+                # Type guard: DOCUMENTS needs list samples.
+                if (
+                    role == FieldRole.DOCUMENTS
+                    and samples
+                    and not any(isinstance(s, list) for s in samples)
+                ):
                     continue
+                # Type guard: METRICS needs numeric or dict-of-numeric samples.
+                if (
+                    role == FieldRole.METRICS
+                    and samples
+                    and not any(
+                        isinstance(s, (int, float))
+                        and not isinstance(s, bool)
+                        or (
+                            isinstance(s, dict)
+                            and s
+                            and all(
+                                isinstance(v, (int, float)) and not isinstance(v, bool)
+                                for v in s.values()
+                            )
+                        )
+                        for s in samples
+                    )
+                ):
+                    continue
+                # Presence guard: IDs should appear in most records
+                # and never be null in any sample.
+                if role == FieldRole.ID:
+                    if path_counts[dot_path] / total < 0.5:
+                        continue
+                    if any(s is None for s in samples):
+                        continue
 
                 presence = path_counts[dot_path] / total
                 confidence = 0.9 * presence
