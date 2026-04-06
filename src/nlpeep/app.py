@@ -269,6 +269,7 @@ class NLPeepApp(App):
         try:
             from textual.widgets import TabbedContent
 
+            from nlpeep.widgets.doc_card import DocCard
             from nlpeep.widgets.field_panel import FieldPanel
             from nlpeep.widgets.record_view import RecordContent
 
@@ -284,6 +285,10 @@ class NLPeepApp(App):
                         str_vals = [str(v) for v in fp.value.values() if isinstance(v, str)]
                         if str_vals:
                             parts.append("\n".join(str_vals))
+                for card in active_pane.query(DocCard):
+                    text = card.speakable_text()
+                    if text:
+                        parts.append(text)
         except Exception:
             pass
         return "\n\n".join(parts)

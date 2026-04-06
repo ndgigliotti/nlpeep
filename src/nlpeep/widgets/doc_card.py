@@ -41,6 +41,24 @@ class DocCard(Widget):
         self.rank = rank
         self.sub_fields = sub_fields or {}
 
+    def speakable_text(self) -> str:
+        """Extract the main text content of this document for TTS."""
+        text_key = self.sub_fields.get("text")
+        if not text_key:
+            for k in ("text", "content", "passage", "chunk", "document", "page_content", "body"):
+                if k in self.doc:
+                    text_key = k
+                    break
+        if text_key and text_key in self.doc:
+            return str(self.doc[text_key])
+        # Fall back: return any string values not used in the header
+        score_key = self.sub_fields.get("score")
+        source_key = self.sub_fields.get("source")
+        shown = {text_key, score_key, source_key}
+        return "\n".join(
+            str(v) for k, v in self.doc.items() if k not in shown and isinstance(v, str)
+        )
+
     def compose(self) -> ComposeResult:
         text_key = self.sub_fields.get("text")
         score_key = self.sub_fields.get("score")
