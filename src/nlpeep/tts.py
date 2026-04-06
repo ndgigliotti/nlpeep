@@ -13,17 +13,7 @@ from typing import Any
 
 _audio_file: Path | None = None
 
-# Scope required for Azure Cognitive Services AD tokens
 _AZURE_SCOPE = "https://cognitiveservices.azure.com/.default"
-
-# Maps config shorthand -> azure.identity credential class names
-_AZURE_CREDENTIAL_NAMES: dict[str, str] = {
-    "default": "DefaultAzureCredential",
-    "cli": "AzureCliCredential",
-    "env": "EnvironmentCredential",
-    "workload": "WorkloadIdentityCredential",
-    "managed": "ManagedIdentityCredential",
-}
 
 
 def is_available() -> bool:
@@ -53,27 +43,29 @@ def _get_tts_config() -> dict[str, Any]:
     return {k: _resolve_env(v) for k, v in tts.items()}
 
 
-def _build_azure_token_provider(value: str):
-    """Build an azure-identity token provider callable from a credential type string.
+def _build_sp_token_provider(tenant_id: str, client_id: str, client_secret: str):
+    """Build an azure-identity token provider from service principal credentials.
 
-    ``value`` should be one of: default, cli, env, workload, managed.
     Requires ``azure-identity``: uv pip install azure-identity
     """
     try:
-        import azure.identity as az_id
+        from azure.identity import ClientSecretCredential, get_bearer_token_provider
     except ImportError as exc:
         raise ImportError(
-            "azure-identity is required for Azure AD token providers. "
+            "azure-identity is required for Azure AD auth. "
             "Install it with: uv pip install azure-identity"
         ) from exc
 
-    cred_name = _AZURE_CREDENTIAL_NAMES.get(value.lower(), "DefaultAzureCredential")
-    cred_cls = getattr(az_id, cred_name)
-    return az_id.get_bearer_token_provider(cred_cls(), _AZURE_SCOPE)
+    cred = ClientSecretCredential(
+        tenant_id=tenant_id,
+        client_id=client_id,
+        client_secret=client_secret,
+    )
+    return get_bearer_token_provider(cred, _AZURE_SCOPE)
 
 
 def speak(text: str) -> None:
-    """Generate speech from text and play it non-blocking."""
+    """Generate speech from text and play it, blocking until complete."""
     import litellm
     from playsound3 import playsound
 
@@ -95,10 +87,14 @@ def speak(text: str) -> None:
         if val is not None:
             kwargs[key] = float(val)
 
-    # Azure AD token provider: convert string shorthand -> callable
-    provider_val = config.pop("azure_ad_token_provider", None)
-    if provider_val:
-        kwargs["azure_ad_token_provider"] = _build_azure_token_provider(str(provider_val))
+    # Azure AD service principal: build token provider from tenant/client/secret
+    tenant_id = config.pop("azure_tenant_id", None)
+    client_id = config.pop("azure_client_id", None)
+    client_secret = config.pop("azure_client_secret", None)
+    if tenant_id and client_id and client_secret:
+        kwargs["azure_ad_token_provider"] = _build_sp_token_provider(
+            tenant_id, client_id, client_secret
+        )
 
     # Pass through remaining keys (api_key, api_base, api_version, response_format, etc.)
     for k, v in config.items():

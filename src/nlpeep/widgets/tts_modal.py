@@ -8,7 +8,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static
 
-from nlpeep.user_config import load_user_config, save_user_config
+from nlpeep.user_config import load_user_config, save_user_config, user_config_path
 
 _VOICE_OPTIONS: list[tuple[str, str]] = [
     ("alloy", "alloy"),
@@ -30,15 +30,6 @@ _FORMAT_OPTIONS: list[tuple[str, str]] = [
     ("flac", "flac"),
     ("wav", "wav"),
     ("pcm", "pcm"),
-]
-
-_AZURE_PROVIDER_OPTIONS: list[tuple[str, str]] = [
-    ("None (use api_key)", ""),
-    ("DefaultAzureCredential", "default"),
-    ("AzureCliCredential", "cli"),
-    ("EnvironmentCredential", "env"),
-    ("WorkloadIdentityCredential", "workload"),
-    ("ManagedIdentityCredential", "managed"),
 ]
 
 
@@ -98,12 +89,10 @@ class TTSModal(ModalScreen[bool]):
         voice_select_val = "__custom__" if current_voice not in known_voices else current_voice
 
         current_format = config.get("response_format", "mp3")
-        current_provider = config.get("azure_ad_token_provider", "")
 
         with Vertical(id="modal-container"):
             yield Static("TTS Configuration", id="modal-title")
             with VerticalScroll():
-                # -- Audio --
                 yield Label("Model (litellm format):", classes="field-label")
                 yield Input(
                     value=config.get("model", "openai/tts-1"),
@@ -146,7 +135,6 @@ class TTSModal(ModalScreen[bool]):
                     id="select-format",
                 )
 
-                # -- API --
                 yield Static("API", classes="section-header")
 
                 yield Label("API Key:", classes="field-label")
@@ -174,30 +162,18 @@ class TTSModal(ModalScreen[bool]):
                     id="input-api-version",
                 )
 
-                # -- Azure AD --
-                yield Static("Azure AD Authentication", classes="section-header")
-
-                yield Label("Token Provider:", classes="field-label")
-                yield Select(
-                    _AZURE_PROVIDER_OPTIONS,
-                    value=current_provider,
-                    allow_blank=False,
-                    id="select-azure-provider",
-                )
-                yield Static(
-                    "Requires  azure-identity:  uv pip install azure-identity",
-                    classes="hint",
-                )
-
-                # -- Advanced --
-                yield Static("Advanced", classes="section-header")
-
                 yield Label("Timeout (seconds, blank for default):", classes="field-label")
                 timeout = config.get("timeout")
                 yield Input(
                     value=str(timeout) if timeout is not None else "",
                     placeholder="30",
                     id="input-timeout",
+                )
+
+                yield Static(
+                    f"For Azure AD service principal auth (azure_tenant_id, azure_client_id,\n"
+                    f"azure_client_secret), edit {user_config_path()} directly.",
+                    classes="hint",
                 )
 
             with Horizontal(id="modal-buttons"):
@@ -253,14 +229,17 @@ class TTSModal(ModalScreen[bool]):
         if api_version:
             tts["api_version"] = api_version
 
-        provider = self.query_one("#select-azure-provider", Select)
-        if provider.value and provider.value != Select.BLANK:
-            tts["azure_ad_token_provider"] = str(provider.value)
-
         timeout_str = self.query_one("#input-timeout", Input).value.strip()
         if timeout_str:
             with contextlib.suppress(ValueError):
                 tts["timeout"] = float(timeout_str)
+
+        # Preserve any advanced keys the user set directly in the config file
+        # (e.g. azure_tenant_id, azure_client_id, azure_client_secret)
+        existing_tts = load_user_config().get("tts", {})
+        for k, v in existing_tts.items():
+            if k not in tts:
+                tts[k] = v
 
         config["tts"] = tts
         path = save_user_config(config)
