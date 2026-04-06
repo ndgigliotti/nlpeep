@@ -27,7 +27,7 @@ class NLPeepApp(App):
         Binding("ctrl+r", "reload", "Reload"),
         Binding("ctrl+f", "focus_search", "Search"),
         Binding("escape", "unfocus_search", "Unfocus", show=False),
-        Binding("s", "speak", "Speak"),
+        Binding("ctrl+s", "speak", "Speak"),
         Binding("j", "next_record", "Next", show=False),
         Binding("k", "prev_record", "Prev", show=False),
     ]

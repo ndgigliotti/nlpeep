@@ -17,8 +17,9 @@ def test_is_available_false_without_litellm():
         assert is_available() is False
 
 
-def test_is_available_false_without_playsound3():
-    """Returns False when playsound3 is not importable."""
+def test_is_available_false_without_playsound3(monkeypatch):
+    """Returns False when playsound3 is not importable and not on WSL."""
+    monkeypatch.setattr(tts, "_is_wsl", lambda: False)
     with patch.dict(sys.modules, {"playsound3": None}):
         assert is_available() is False
 
@@ -74,8 +75,8 @@ def test_get_tts_config_empty_when_no_section(monkeypatch):
 # -- speak / stop lifecycle ---------------------------------------------------
 
 
-def test_speak_calls_litellm_and_playsound(monkeypatch):
-    """speak() generates audio via litellm and plays with playsound3."""
+def test_speak_calls_litellm_and_plays(monkeypatch):
+    """speak() generates audio via litellm and plays it."""
     monkeypatch.setattr(
         tts,
         "_get_tts_config",
@@ -86,13 +87,10 @@ def test_speak_calls_litellm_and_playsound(monkeypatch):
     mock_litellm = MagicMock()
     mock_litellm.speech.return_value = mock_response
 
-    mock_playsound_fn = MagicMock()
-    mock_stopsound_fn = MagicMock()
-    mock_ps3 = MagicMock()
-    mock_ps3.playsound = mock_playsound_fn
-    mock_ps3.stopsound = mock_stopsound_fn
+    mock_play = MagicMock()
+    monkeypatch.setattr(tts, "_play_audio", mock_play)
 
-    with patch.dict(sys.modules, {"litellm": mock_litellm, "playsound3": mock_ps3}):
+    with patch.dict(sys.modules, {"litellm": mock_litellm}):
         tts.speak("Hello world")
 
         # litellm.speech called with correct args
@@ -106,16 +104,14 @@ def test_speak_calls_litellm_and_playsound(monkeypatch):
         # Audio saved to temp file
         mock_response.stream_to_file.assert_called_once()
 
-        # playsound called non-blocking
-        mock_playsound_fn.assert_called_once()
-        assert mock_playsound_fn.call_args.kwargs.get("block") is False
+        # _play_audio called
+        mock_play.assert_called_once()
 
         # State is "speaking"
         assert tts.is_speaking()
 
         # stop() cleans up
         tts.stop()
-        mock_stopsound_fn.assert_called()
         assert not tts.is_speaking()
 
 
