@@ -61,16 +61,19 @@ def _play_audio(path: Path) -> None:
     """Play an audio file, handling WSL2 and native Linux/macOS."""
     global _playback_proc
 
-    # WSL2: use Windows-side PowerShell to play audio
+    # WSL2: use Windows Media Player COM object via PowerShell (supports MP3)
     if _is_wsl() and shutil.which("powershell.exe"):
         win_path = subprocess.check_output(["wslpath", "-w", str(path)], text=True).strip()
+        ps_script = (
+            f"$wmp = New-Object -ComObject WMPlayer.OCX;"
+            f"$wmp.URL = '{win_path}';"
+            f"$wmp.controls.play();"
+            f"Start-Sleep -Milliseconds 500;"
+            f"while ($wmp.playState -eq 3) {{ Start-Sleep -Milliseconds 100 }};"
+            f"$wmp.close()"
+        )
         _playback_proc = subprocess.Popen(
-            [
-                "powershell.exe",
-                "-NoProfile",
-                "-Command",
-                (f"$p = New-Object System.Media.SoundPlayer '{win_path}';$p.PlaySync()"),
-            ],
+            ["powershell.exe", "-NoProfile", "-Command", ps_script],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
