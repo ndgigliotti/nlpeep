@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from textual import on
+from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
@@ -27,6 +27,7 @@ class NLPeepApp(App):
         Binding("ctrl+r", "reload", "Reload"),
         Binding("ctrl+f", "focus_search", "Search"),
         Binding("escape", "unfocus_search", "Unfocus", show=False),
+        Binding("s", "speak", "Speak"),
         Binding("j", "next_record", "Next", show=False),
         Binding("k", "prev_record", "Prev", show=False),
     ]
@@ -225,3 +226,68 @@ class NLPeepApp(App):
                 nav.select_index(new_idx)
             except Exception:
                 pass
+
+    def action_speak(self) -> None:
+        if self._input_focused():
+            return
+        from nlpeep import tts
+
+        if not tts.is_available():
+            self.notify("Install nlpeep[tts] for text-to-speech", severity="warning")
+            return
+        if tts.is_speaking():
+            tts.stop()
+            self.notify("Stopped")
+            return
+        text = self._get_speakable_text()
+        if not text:
+            self.notify("No text to speak", severity="warning")
+            return
+        self.notify("Speaking...")
+        self._do_speak(text)
+
+    @work(thread=True, exclusive=True, group="tts")
+    def _do_speak(self, text: str) -> None:
+        from nlpeep import tts
+
+        try:
+            tts.speak(text)
+        except Exception as exc:
+            tts.stop()
+            self.call_from_thread(self.notify, f"TTS error: {exc}", severity="error")
+
+    def _get_speakable_text(self) -> str:
+        """Extract text from query header and active tab content."""
+        parts: list[str] = []
+        try:
+            view = self.query_one(RecordView)
+            if not view._record or not view._mapping:
+                return ""
+            record = view._record
+            mapping = view._mapping
+
+            from nlpeep.schema import FieldRole
+
+            query_val = mapping.resolve(record.data, FieldRole.QUERY)
+            input_val = mapping.resolve(record.data, FieldRole.INPUT) if not query_val else None
+            primary = query_val or input_val
+            if primary and isinstance(primary, str):
+                parts.append(primary)
+
+            from textual.widgets import TabbedContent
+
+            from nlpeep.widgets.field_panel import FieldPanel
+
+            tabbed = view.query_one(TabbedContent)
+            active_pane = tabbed.active_pane
+            if active_pane:
+                for fp in active_pane.query(FieldPanel):
+                    if isinstance(fp.value, str):
+                        parts.append(fp.value)
+                    elif isinstance(fp.value, dict):
+                        str_vals = [str(v) for v in fp.value.values() if isinstance(v, str)]
+                        if str_vals:
+                            parts.append("\n".join(str_vals))
+        except Exception:
+            pass
+        return "\n\n".join(parts)
