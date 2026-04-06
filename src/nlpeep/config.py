@@ -43,10 +43,11 @@ def load_config(path: Path) -> dict[str, Any]:
 def load_mapping(data_path: Path, explicit_config: Path | None = None) -> SchemaMapping | None:
     """Try to load a SchemaMapping from config. Returns None if no config found."""
     config_path = find_config(data_path, explicit_config)
-    if not config_path:
-        return None
-    config = load_config(config_path)
-    return SchemaMapping.from_config(config)
+    if config_path:
+        return SchemaMapping.from_config(load_config(config_path))
+    from nlpeep.user_config import get_default_mapping
+
+    return get_default_mapping()
 
 
 def save_config(data_path: Path, mapping: SchemaMapping) -> Path:

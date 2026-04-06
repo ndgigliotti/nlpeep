@@ -54,7 +54,9 @@ class NLPeepApp(App):
                 dark=True,
             )
         )
-        self.theme = "neon-cyberpunk"
+        from nlpeep.user_config import get_user_setting
+
+        self.theme = get_user_setting("display", "theme", "neon-cyberpunk")
         self._path = path
         self._config_path = config_path
         self._store: RecordStore | None = None

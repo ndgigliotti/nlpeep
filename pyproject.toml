@@ -8,6 +8,7 @@ dependencies = [
     "rich>=13.0",
     "tomli-w>=1.0",
     "polars>=1.0",
+    "platformdirs>=4.0",
 ]
 
 [project.scripts]
