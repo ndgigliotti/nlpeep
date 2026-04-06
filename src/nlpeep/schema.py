@@ -46,7 +46,7 @@ class FieldArchetype(StrEnum):
     SEQUENCE = "sequence"
     CONVERSATION = "conversation"
     STEPS = "steps"
-    TAGGED_SEQUENCE = "tagged_sequence"
+    ALIGNED_PAIR = "aligned_pair"
     FLAT_RECORD = "flat_record"
     NESTED_BLOB = "nested_blob"
 
@@ -348,12 +348,12 @@ class SchemaMapping:
                 return m.archetype
         return None
 
-    def tagged_sequence_pairs(self) -> list[tuple[FieldMapping, FieldMapping]]:
+    def aligned_pairs(self) -> list[tuple[FieldMapping, FieldMapping]]:
         """Return (token_mapping, tag_mapping) pairs for tagged sequences."""
         seen: set[str] = set()
         pairs: list[tuple[FieldMapping, FieldMapping]] = []
         for m in self.mappings:
-            if m.archetype != FieldArchetype.TAGGED_SEQUENCE or not m.paired_with:
+            if m.archetype != FieldArchetype.ALIGNED_PAIR or not m.paired_with:
                 continue
             if m.json_path in seen:
                 continue
@@ -999,8 +999,8 @@ def _detect_tagged_pairs(
             )
             if not aligned:
                 continue
-            tc.archetype = FieldArchetype.TAGGED_SEQUENCE
+            tc.archetype = FieldArchetype.ALIGNED_PAIR
             tc.paired_with = tg.json_path
-            tg.archetype = FieldArchetype.TAGGED_SEQUENCE
+            tg.archetype = FieldArchetype.ALIGNED_PAIR
             tg.paired_with = tc.json_path
             break

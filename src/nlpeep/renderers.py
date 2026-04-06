@@ -24,7 +24,7 @@ class ValueType(Enum):
     FLAT_DICT = "flat_dict"
     NESTED_DICT = "nested_dict"
     SIMPLE_LIST = "simple_list"
-    TAGGED_SEQUENCE = "tagged_sequence"
+    ALIGNED_PAIR = "aligned_pair"
     TABLE = "table"
     JSON_RAW = "json_raw"
 
@@ -59,7 +59,7 @@ _ARCHETYPE_TO_VALUE_TYPE: dict[FieldArchetype, ValueType] = {
     FieldArchetype.SCORE: ValueType.SCORE,
     FieldArchetype.SCORE_DICT: ValueType.METRIC_DICT,
     FieldArchetype.RANKED_LIST: ValueType.DOC_LIST,
-    FieldArchetype.TAGGED_SEQUENCE: ValueType.TAGGED_SEQUENCE,
+    FieldArchetype.ALIGNED_PAIR: ValueType.ALIGNED_PAIR,
     FieldArchetype.SEQUENCE: ValueType.SIMPLE_LIST,
     FieldArchetype.CONVERSATION: ValueType.CHAT_MESSAGES,
     FieldArchetype.STEPS: ValueType.STEP_LIST,
@@ -159,16 +159,12 @@ def classify_value(
     if isinstance(value, dict):
         if not value:
             return ValueType.SHORT_TEXT
-        # Tagged sequence: aligned "tokens" and "tags" lists
-        if "tokens" in value and "tags" in value:
-            tokens, tags = value["tokens"], value["tags"]
-            if (
-                isinstance(tokens, list)
-                and isinstance(tags, list)
-                and len(tokens) == len(tags)
-                and tokens
-            ):
-                return ValueType.TAGGED_SEQUENCE
+        # Aligned pair: dict with exactly two equal-length lists
+        list_items = [(k, v) for k, v in value.items() if isinstance(v, list)]
+        if len(list_items) == 2:
+            (_, a), (_, b) = list_items
+            if a and b and len(a) == len(b):
+                return ValueType.ALIGNED_PAIR
         if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value.values()):
             return ValueType.METRIC_DICT
         if all(isinstance(v, (str, int, float, bool, type(None))) for v in value.values()):
@@ -453,116 +449,35 @@ def _render_json_raw(
     return Static(syntax, classes="field-json")
 
 
-# -- Tagged-sequence (NER) renderer ------------------------------------------
-
-_NER_COLORS: dict[str, str] = {
-    "PER": "cyan",
-    "PERSON": "cyan",
-    "ORG": "green",
-    "ORGANIZATION": "green",
-    "LOC": "yellow",
-    "LOCATION": "yellow",
-    "GPE": "yellow",
-    "MISC": "magenta",
-    "DATE": "blue",
-    "TIME": "blue",
-    "MONEY": "bright_green",
-    "PERCENT": "bright_green",
-    "FAC": "bright_magenta",
-    "EVENT": "bright_cyan",
-    "PRODUCT": "bright_yellow",
-    "NORP": "bright_green",
-    "QUANTITY": "bright_green",
-    "ORDINAL": "bright_blue",
-    "CARDINAL": "bright_blue",
-}
+# -- Aligned-pair renderer ---------------------------------------------------
 
 
-def _parse_bio_tag(tag: str) -> tuple[str, str]:
-    """Parse a BIO/IOB2 tag into (prefix, entity_type).
-
-    Returns ("O", "O") for outside tags, or (prefix, type) for entities.
-    """
-    if tag in ("O", "o"):
-        return ("O", "O")
-    if "-" in tag:
-        prefix, entity = tag.split("-", 1)
-        return (prefix, entity)
-    return ("B", tag)
-
-
-def _render_tagged_sequence(
+def _render_aligned_pair(
     value: Any, field_name: str, sub_fields: dict[str, str], metric_scale: MetricScale | None
 ) -> Widget:
-    """Render aligned tokens and tags as an annotated sequence."""
-    if not isinstance(value, dict) or "tokens" not in value or "tags" not in value:
+    """Render two aligned lists as a vertical DataTable."""
+    if not isinstance(value, dict):
         return _render_json_raw(value, field_name, sub_fields, metric_scale)
 
-    tokens = value["tokens"]
-    tags = value["tags"]
-
-    if not isinstance(tokens, list) or not isinstance(tags, list):
+    # Find the two list keys
+    list_keys = [k for k, v in value.items() if isinstance(v, list)]
+    if len(list_keys) != 2:
         return _render_json_raw(value, field_name, sub_fields, metric_scale)
 
-    if len(tokens) != len(tags):
+    col_a, col_b = list_keys
+    items_a, items_b = value[col_a], value[col_b]
+
+    if len(items_a) != len(items_b):
         return _render_json_raw(value, field_name, sub_fields, metric_scale)
 
-    if not tokens:
-        return Static("(empty sequence)", classes="field-tagged-seq")
+    if not items_a:
+        return Static("(empty sequence)", classes="field-aligned-pair")
 
-    if all(isinstance(t, str) for t in tags):
-        return _render_bio_tags(tokens, tags)
-    if all(isinstance(t, int) for t in tags):
-        return _render_int_tags(tokens, tags)
-    return _render_json_raw(value, field_name, sub_fields, metric_scale)
-
-
-def _render_bio_tags(tokens: list[str], tags: list[str]) -> Widget:
-    """Render tokens with BIO/IOB2 string tags, grouping entity spans."""
-    parts: list[str] = []
-    i = 0
-    while i < len(tokens):
-        prefix, etype = _parse_bio_tag(tags[i])
-        if prefix == "O":
-            parts.append(escape(tokens[i]))
-            i += 1
-        else:
-            # Collect the full entity span (B-X followed by I-X)
-            entity_tokens = [tokens[i]]
-            j = i + 1
-            while j < len(tokens):
-                p2, e2 = _parse_bio_tag(tags[j])
-                if p2 == "I" and e2 == etype:
-                    entity_tokens.append(tokens[j])
-                    j += 1
-                else:
-                    break
-            entity_text = " ".join(escape(t) for t in entity_tokens)
-            color = _NER_COLORS.get(etype.upper(), "bright_white")
-            parts.append(f"[bold {color}]{entity_text}[/bold {color}][dim]({etype})[/dim]")
-            i = j
-
-    return Static(" ".join(parts), classes="field-tagged-seq")
-
-
-def _render_int_tags(tokens: list[str], tags: list[int]) -> Widget:
-    """Render tokens with integer tags in a two-line aligned format."""
-    widths = [max(len(tok), len(str(tag))) + 2 for tok, tag in zip(tokens, tags, strict=False)]
-
-    # Token line: pad before escaping so display width stays correct
-    token_parts = [escape(tok.ljust(w)) for tok, w in zip(tokens, widths, strict=False)]
-
-    # Tag line: integer tags with non-zero highlighted
-    tag_parts: list[str] = []
-    for tag, w in zip(tags, widths, strict=False):
-        tag_str = str(tag).ljust(w)
-        if tag == 0:
-            tag_parts.append(f"[dim]{tag_str}[/dim]")
-        else:
-            tag_parts.append(f"[bold bright_cyan]{tag_str}[/bold bright_cyan]")
-
-    text = "".join(token_parts).rstrip() + "\n" + "".join(tag_parts).rstrip()
-    return Static(text, classes="field-tagged-seq")
+    table = DataTable(classes="field-aligned-pair")
+    table.add_columns(col_a, col_b)
+    for a, b in zip(items_a, items_b, strict=False):
+        table.add_row(str(a), str(b))
+    return table
 
 
 _RENDERERS = {
@@ -576,7 +491,7 @@ _RENDERERS = {
     ValueType.STEP_LIST: _render_step_list,
     ValueType.FLAT_DICT: _render_flat_dict,
     ValueType.NESTED_DICT: _render_nested_dict,
-    ValueType.TAGGED_SEQUENCE: _render_tagged_sequence,
+    ValueType.ALIGNED_PAIR: _render_aligned_pair,
     ValueType.SIMPLE_LIST: _render_simple_list,
     ValueType.TABLE: _render_table,
     ValueType.JSON_RAW: _render_json_raw,
