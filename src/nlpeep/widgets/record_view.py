@@ -194,7 +194,10 @@ class RecordView(Widget):
         primary_val = query_val or input_val
         if primary_val:
             prefix = "Q:" if query_val else "Input:"
-            header.update(f"[bold]{prefix}[/bold] {primary_val}")
+            display_val = primary_val
+            if isinstance(display_val, str) and len(display_val) > 500:
+                display_val = display_val[:500] + "..."
+            header.update(f"[bold]{prefix}[/bold] {display_val}")
         else:
             header.update(f"[dim]Record {record.index}[/dim]")
 
