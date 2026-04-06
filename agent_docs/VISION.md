@@ -85,3 +85,5 @@ The priority is making this installable and discoverable:
 4. stdin support (`some_command | peep`) for pipeline integration
 5. Clipboard copy for field values
 6. In-app help screen
+7. Optional TTS for reading field content aloud (OpenAI TTS API, gated behind `nlpeep[tts]` extra)
+8. NER-specific renderer for aligned token/tag sequences (inline annotated spans instead of two separate lists)
