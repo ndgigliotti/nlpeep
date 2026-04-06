@@ -54,17 +54,7 @@ def get_default_mapping() -> SchemaMapping | None:
     """Build SchemaMapping from [defaults] section, or None if empty."""
     config = load_user_config()
     defaults = config.get("defaults", {})
-    if not defaults:
+    if not defaults or "mapping" not in defaults:
         return None
-    # Restructure defaults into the format SchemaMapping.from_config() expects
-    from_config_dict: dict[str, Any] = {}
-    if "mapping" in defaults:
-        from_config_dict["mapping"] = defaults["mapping"]
-    if "display" in defaults:
-        from_config_dict["display"] = defaults["display"]
-    if "metric_scales" in defaults:
-        from_config_dict["metric_scales"] = defaults["metric_scales"]
-    if not from_config_dict.get("mapping"):
-        return None
-    result = SchemaMapping.from_config(from_config_dict)
+    result = SchemaMapping.from_config(defaults)
     return result if result.mappings else None
