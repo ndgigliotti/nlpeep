@@ -61,16 +61,28 @@ def _play_audio(path: Path) -> None:
     """Play an audio file, handling WSL2 and native Linux/macOS."""
     global _playback_proc
 
-    # WSL2: use Windows Media Player COM object via PowerShell (supports MP3)
+    # WSL2: copy to Windows temp dir, play with MediaPlayer via PowerShell.
+    # UNC paths (\\wsl.localhost\...) don't work with Windows audio APIs,
+    # so the file must be on a native Windows path.
     if _is_wsl() and shutil.which("powershell.exe"):
-        win_path = subprocess.check_output(["wslpath", "-w", str(path)], text=True).strip()
+        win_temp = subprocess.check_output(
+            ["powershell.exe", "-NoProfile", "-Command", "$env:TEMP"],
+            text=True,
+        ).strip()
+        win_dest = f"{win_temp}\\nlpeep_tts{path.suffix}"
+        linux_dest = subprocess.check_output(["wslpath", "-u", win_dest], text=True).strip()
+        import shutil as sh
+
+        sh.copy2(str(path), linux_dest)
         ps_script = (
-            f"$wmp = New-Object -ComObject WMPlayer.OCX;"
-            f"$wmp.URL = '{win_path}';"
-            f"$wmp.controls.play();"
-            f"Start-Sleep -Milliseconds 500;"
-            f"while ($wmp.playState -eq 3) {{ Start-Sleep -Milliseconds 100 }};"
-            f"$wmp.close()"
+            "Add-Type -AssemblyName presentationCore;"
+            "$mp = New-Object System.Windows.Media.MediaPlayer;"
+            f"$mp.Open([uri]'{win_dest}');"
+            "Start-Sleep -Seconds 1;"
+            "$mp.Play();"
+            "while ($mp.Position -lt $mp.NaturalDuration.TimeSpan) {"
+            "  Start-Sleep -Milliseconds 200 };"
+            "$mp.Stop(); $mp.Close()"
         )
         _playback_proc = subprocess.Popen(
             ["powershell.exe", "-NoProfile", "-Command", ps_script],
