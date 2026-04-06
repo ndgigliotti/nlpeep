@@ -75,7 +75,7 @@ def test_get_tts_config_empty_when_no_section(monkeypatch):
 
 
 def test_speak_calls_litellm_and_plays(monkeypatch):
-    """speak() generates audio via litellm and plays with playsound3."""
+    """speak() generates audio via litellm and plays with playsound3 blocking."""
     monkeypatch.setattr(
         tts,
         "_get_tts_config",
@@ -87,10 +87,8 @@ def test_speak_calls_litellm_and_plays(monkeypatch):
     mock_litellm.speech.return_value = mock_response
 
     mock_playsound_fn = MagicMock()
-    mock_stopsound_fn = MagicMock()
     mock_ps3 = MagicMock()
     mock_ps3.playsound = mock_playsound_fn
-    mock_ps3.stopsound = mock_stopsound_fn
 
     with patch.dict(sys.modules, {"litellm": mock_litellm, "playsound3": mock_ps3}):
         tts.speak("Hello world")
@@ -106,16 +104,11 @@ def test_speak_calls_litellm_and_plays(monkeypatch):
         # Audio saved to temp file
         mock_response.stream_to_file.assert_called_once()
 
-        # playsound called non-blocking
+        # playsound called blocking so the worker thread waits for completion
         mock_playsound_fn.assert_called_once()
-        assert mock_playsound_fn.call_args.kwargs.get("block") is False
+        assert mock_playsound_fn.call_args.kwargs.get("block") is True
 
-        # State is "speaking"
-        assert tts.is_speaking()
-
-        # stop() cleans up
-        tts.stop()
-        mock_stopsound_fn.assert_called()
+        # State cleared automatically when speak() returns (finally block)
         assert not tts.is_speaking()
 
 
@@ -147,6 +140,3 @@ def test_speak_without_optional_config(monkeypatch):
         assert "api_key" not in call_kw
         assert "api_base" not in call_kw
         assert "speed" not in call_kw
-
-        # Cleanup
-        tts.stop()

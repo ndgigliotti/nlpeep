@@ -113,7 +113,15 @@ def speak(text: str) -> None:
     _audio_file = Path(tmp_path)
     response.stream_to_file(_audio_file)
 
-    playsound(str(_audio_file), block=False)
+    try:
+        # block=True so the caller's thread waits; stopsound() can interrupt it.
+        # The finally clears state when playback ends naturally or is interrupted.
+        playsound(str(_audio_file), block=True)
+    finally:
+        if _audio_file is not None:
+            with contextlib.suppress(OSError):
+                _audio_file.unlink(missing_ok=True)
+        _audio_file = None
 
 
 def stop() -> None:
