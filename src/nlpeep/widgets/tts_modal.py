@@ -171,8 +171,7 @@ class TTSModal(ModalScreen[bool]):
                 )
 
                 yield Static(
-                    f"For Azure AD service principal auth (azure_tenant_id, azure_client_id,\n"
-                    f"azure_client_secret), edit {user_config_path()} directly.",
+                    f"For advanced configuration, edit {user_config_path()} directly.",
                     classes="hint",
                 )
 
