@@ -10,7 +10,7 @@ from textual.widget import Widget
 from textual.widgets import Static, TabbedContent, TabPane
 
 from nlpeep.data import Record
-from nlpeep.schema import FieldRole, SchemaMapping
+from nlpeep.schema import FieldArchetype, FieldRole, SchemaMapping
 from nlpeep.widgets.field_panel import FieldPanel
 
 
@@ -45,16 +45,43 @@ class RecordContent(Widget):
             r for r in active_roles if r not in (FieldRole.QUERY, FieldRole.INPUT, FieldRole.ID)
         ]
 
+        # Detect tagged-sequence pairs (e.g. NER tokens + tags)
+        seq_pairs = mapping.tagged_sequence_pairs()
+        paired_paths = {p for tm, tgm in seq_pairs for p in (tm.json_path, tgm.json_path)}
+
         has_response = FieldRole.RESPONSE in active_roles
         has_ground_truth = FieldRole.GROUND_TRUTH in active_roles
         do_comparison = has_response and has_ground_truth
+        # Skip comparison when ground-truth is part of a tagged sequence
+        if do_comparison:
+            gt_mappings = mapping.get_all_for_role(FieldRole.GROUND_TRUTH)
+            if all(m.json_path in paired_paths for m in gt_mappings):
+                do_comparison = False
 
         with TabbedContent():
+            # Tagged-sequence pairs get a dedicated tab
+            for token_m, tag_m in seq_pairs:
+                tokens_val = record.get_path(token_m.json_path)
+                tags_val = record.get_path(tag_m.json_path)
+                if tokens_val is not None and tags_val is not None:
+                    yield TabPane(
+                        "Entities",
+                        FieldPanel(
+                            field_name=f"{token_m.json_path} + {tag_m.json_path}",
+                            value={"tokens": tokens_val, "tags": tags_val},
+                            role=FieldRole.UNMAPPED,
+                            archetype=FieldArchetype.TAGGED_SEQUENCE,
+                            show_label=False,
+                        ),
+                    )
+
             # Primary input text gets its own tab (header is just a preview).
             for primary_role in (FieldRole.QUERY, FieldRole.INPUT):
                 primary_mapping = mapping.get_mapping(primary_role)
                 if not primary_mapping:
                     continue
+                if primary_mapping.json_path in paired_paths:
+                    break  # shown in Entities tab
                 val = mapping.resolve(record.data, primary_role)
                 if val is not None:
                     yield TabPane(
@@ -69,13 +96,17 @@ class RecordContent(Widget):
                 break  # only one primary role
 
             for role in tab_roles:
+                # Skip roles whose fields are entirely consumed by tagged sequences
+                all_for_role = mapping.get_all_for_role(role)
+                if all_for_role and all(m.json_path in paired_paths for m in all_for_role):
+                    continue
+
                 if do_comparison and role in (FieldRole.RESPONSE, FieldRole.GROUND_TRUTH):
                     if role == FieldRole.GROUND_TRUTH:
                         continue
                     yield self._build_comparison_pane(record, mapping)
                     continue
 
-                all_for_role = mapping.get_all_for_role(role)
                 if not all_for_role:
                     continue
 
@@ -119,8 +150,10 @@ class RecordContent(Widget):
                     ),
                 )
 
-            # Unmapped fields tab
+            # Unmapped fields tab (exclude tagged-sequence paired fields)
             unmapped = mapping.unmapped_fields(record.data)
+            for p in paired_paths:
+                unmapped.pop(p, None)
             if unmapped:
                 panels = [
                     FieldPanel(

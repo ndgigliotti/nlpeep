@@ -46,6 +46,7 @@ class FieldArchetype(StrEnum):
     SEQUENCE = "sequence"
     CONVERSATION = "conversation"
     STEPS = "steps"
+    TAGGED_SEQUENCE = "tagged_sequence"
     FLAT_RECORD = "flat_record"
     NESTED_BLOB = "nested_blob"
 
@@ -273,6 +274,7 @@ class FieldMapping:
     confidence: float = 0.0
     archetype: FieldArchetype | None = None
     metric_scale: MetricScale | None = None
+    paired_with: str | None = None
 
     def __post_init__(self) -> None:
         if not self.display_name:
@@ -345,6 +347,29 @@ class SchemaMapping:
             if m.json_path == path:
                 return m.archetype
         return None
+
+    def tagged_sequence_pairs(self) -> list[tuple[FieldMapping, FieldMapping]]:
+        """Return (token_mapping, tag_mapping) pairs for tagged sequences."""
+        seen: set[str] = set()
+        pairs: list[tuple[FieldMapping, FieldMapping]] = []
+        for m in self.mappings:
+            if m.archetype != FieldArchetype.TAGGED_SEQUENCE or not m.paired_with:
+                continue
+            if m.json_path in seen:
+                continue
+            partner = next((p for p in self.mappings if p.json_path == m.paired_with), None)
+            if not partner:
+                continue
+            seen.add(m.json_path)
+            seen.add(partner.json_path)
+            # Token field first, tag field second (GROUND_TRUTH = tag side)
+            if m.role == FieldRole.GROUND_TRUTH:
+                pairs.append((partner, m))
+            elif partner.role == FieldRole.GROUND_TRUTH or m.json_path < partner.json_path:
+                pairs.append((m, partner))
+            else:
+                pairs.append((partner, m))
+        return pairs
 
     def label_path(self) -> str | None:
         for role in (FieldRole.QUERY, FieldRole.INPUT, FieldRole.ID):
@@ -614,6 +639,9 @@ class SchemaMapping:
                     archetype=arch,
                 )
             )
+
+        # Pass 5: Detect tagged-sequence pairs (e.g. NER token/tag alignment).
+        _detect_tagged_pairs(mappings, path_samples)
 
         return cls(mappings=mappings)
 
@@ -908,3 +936,71 @@ def _detect_doc_subfields(samples: list[Any]) -> dict[str, str]:
             sub_fields["source"] = key
 
     return sub_fields
+
+
+def _is_tag_list(items: list[Any]) -> bool:
+    """Check if a flat list of items looks like NER tags (ints or BIO strings)."""
+    if all(isinstance(item, int) for item in items):
+        return True
+    if not all(isinstance(item, str) for item in items):
+        return False
+    # BIO/IOB2 pattern: items are "O" or "{prefix}-{entity}"
+    bio_prefixes = set("BIESLUbiesluo")
+    bio_count = sum(
+        1
+        for item in items
+        if item in ("O", "o") or (len(item) >= 3 and item[1] == "-" and item[0] in bio_prefixes)
+    )
+    return bio_count / len(items) > 0.8
+
+
+def _detect_tagged_pairs(
+    mappings: list[FieldMapping],
+    path_samples: dict[str, list[Any]],
+) -> None:
+    """Post-process mappings to find aligned token/tag pairs (e.g. NER data).
+
+    When a pair is found, both mappings get ``archetype=TAGGED_SEQUENCE``
+    and each points to its partner via ``paired_with``.
+    """
+    token_cands: list[FieldMapping] = []
+    tag_cands: list[FieldMapping] = []
+
+    for m in mappings:
+        samples = path_samples.get(m.json_path, [])
+        if not samples or not all(isinstance(s, list) for s in samples):
+            continue
+        flat = [item for s in samples for item in s]
+        if not flat:
+            continue
+
+        if _is_tag_list(flat):
+            tag_cands.append(m)
+        elif all(isinstance(item, str) for item in flat):
+            avg_len = sum(len(item) for item in flat) / len(flat)
+            if avg_len < 30:
+                token_cands.append(m)
+
+    for tc in token_cands:
+        tc_samples = path_samples.get(tc.json_path, [])
+        for tg in tag_cands:
+            if tg.paired_with:
+                continue
+            tg_samples = path_samples.get(tg.json_path, [])
+            # Must be siblings (same parent path)
+            tc_parent = tc.json_path.rsplit(".", 1)[0] if "." in tc.json_path else ""
+            tg_parent = tg.json_path.rsplit(".", 1)[0] if "." in tg.json_path else ""
+            if tc_parent != tg_parent:
+                continue
+            # Must have matching lengths across all samples
+            aligned = all(
+                isinstance(ts, list) and isinstance(gs, list) and len(ts) == len(gs)
+                for ts, gs in zip(tc_samples, tg_samples, strict=False)
+            )
+            if not aligned:
+                continue
+            tc.archetype = FieldArchetype.TAGGED_SEQUENCE
+            tc.paired_with = tg.json_path
+            tg.archetype = FieldArchetype.TAGGED_SEQUENCE
+            tg.paired_with = tc.json_path
+            break
